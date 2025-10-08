@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "YourProject": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "LLM_BASE_URL": "http://localhost:8080/v1",
+        "LLM_API_KEY": "EMPTY",
+        "LLM_MODEL": "Qwen2.5 7B Instruct",
+        "MBASE_SESSION_MODE": "client",
+        "MBASE_CONV_ID_STRATEGY": "sid",
+        "SESSIONS_PATH": "sessions.json",
+        "SOFT_TOKEN_BUDGET": "32000"
+      }
+    }
+  }
+}
