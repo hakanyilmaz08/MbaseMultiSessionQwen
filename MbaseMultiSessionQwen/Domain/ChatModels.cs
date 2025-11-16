@@ -1,0 +1,24 @@
+﻿namespace Mbase.Domain;
+
+public sealed record ChatMessage(string Role, string Content, DateTimeOffset Ts);
+
+public sealed class SessionState
+{
+    public required string SessionId { get; init; }               // immutable id
+    public required string Model { get; init; }                    // e.g., "Qwen2.5-7B-Instruct"
+    public string? SystemPrompt { get; set; }                      // mutable
+    public double Temperature { get; set; } = 0.7;
+    public double TopP { get; set; } = 0.9;
+
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow; // **set**, not init
+
+    public List<ChatMessage> History { get; } = new();             // rolling history
+    public string? KvCacheHandle { get; set; }                     // optional: engine KV handle
+
+    public int PromptTokens { get; set; }
+    public int CompletionTokens { get; set; }
+
+    // Optional TTL if you want expiry/GC later
+    public TimeSpan? Ttl { get; set; }
+}

@@ -10,10 +10,29 @@ public class SessionMediator
 {
     private readonly SessionManager _manager;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private readonly SemaphoreSlim _globalSerial = new(1, 1);
+
 
     public SessionMediator(SessionManager manager)
     {
         _manager = manager;
+    }
+    public record TimedReply(string Reply, TimeSpan Elapsed);
+
+    // add this alongside your existing methods
+    public async Task<TimedReply> SendToSessionTimedAsync(string sid, string userMessage)
+    {
+        var gate = _locks.GetOrAdd(sid, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            _manager.Ensure(sid);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var reply = await _manager.SendAsync(sid, userMessage);
+            sw.Stop();
+            return new TimedReply(reply, sw.Elapsed);
+        }
+        finally { gate.Release(); }
     }
 
     /// <summary>
@@ -145,7 +164,23 @@ public class SessionMediator
 
         return (targetReply, echoed);
     }
-
+    /// <summary>
+    /// Serialized version: only one in-flight call globally at a time.
+    /// Use when concurrency slows or times out your server.
+    /// </summary>
+    public async Task<string> SendToSessionQueuedAsync(string sid, string userMessage)
+    {
+        await _globalSerial.WaitAsync();
+        try
+        {
+            _manager.Ensure(sid);
+            return await _manager.SendAsync(sid, userMessage);
+        }
+        finally
+        {
+            _globalSerial.Release();
+        }
+    }
     private static string? FindLastByRole(IReadOnlyList<Message> history, string role)
     {
         for (int i = history.Count - 1; i >= 0; i--)

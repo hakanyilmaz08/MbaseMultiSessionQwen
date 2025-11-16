@@ -1,0 +1,255 @@
+﻿  public async Task<GameResult> PlayAsync(
+    string sessionA,
+    string sessionB,
+    int rounds = 100,
+    bool resetPrompts = false)
+    {
+        _mgr.Ensure(sessionA, resetIfExists: resetPrompts);
+        _mgr.Ensure(sessionB, resetIfExists: resetPrompts);
+
+        _mgr.AppendMessage(sessionA, "system", AgentSystemPrompt("A"));
+        _mgr.AppendMessage(sessionB, "system", AgentSystemPrompt("B"));
+
+        var log = new List<RoundRow>(rounds);
+        int scoreA = 0, scoreB = 0;
+        string? lastA = null, lastB = null;
+
+        for (int r = 1; r <= rounds; r++)
+        {
+            // Build BOTH prompts upfront (blind to current round)
+            var promptA = RoundPrompt("A", r, lastOpponentMove: lastB, myScore: scoreA, oppScore: scoreB);
+            var promptB = RoundPrompt("B", r, lastOpponentMove: lastA, myScore: scoreB, oppScore: scoreA);
+
+            // Queue-based: send A, await; then send B, await.
+            var rawA = await _med.SendToSessionQueuedAsync(sessionA, promptA);
+            var rawB = await _med.SendToSessionQueuedAsync(sessionB, promptB);
+
+            var moveA = ParseMove(rawA) ?? "D";
+            var moveB = ParseMove(rawB) ?? "D";
+
+            var (pa, pb) = Payoff(moveA, moveB);
+            scoreA += pa; scoreB += pb;
+
+            log.Add(new RoundRow(r, moveA, moveB, pa, pb, scoreA, scoreB, rawA.Trim(), rawB.Trim()));
+
+            // Reveal only AFTER both moves are fixed
+            lastA = moveA;
+            lastB = moveB;
+        }
+
+        return new GameResult(sessionA, sessionB, rounds, scoreA, scoreB, log);
+    }
+
+
+    // ---------- Helpers ----------
+
+//    private static string AgentSystemPrompt(string name) =>
+//  $"""
+//You are **Agent {name}**, a participant in a **1000-round strategic interaction game**.
+
+//---
+
+//### 🎯 Game Overview
+//In each round, both you and another agent independently select one of two possible actions.  
+//Each combination of choices produces a specific point outcome for both players.  
+//Your objective is to **maximize your total points** over all 1000 rounds.
+
+//---
+
+//### 📊 Payoff Table
+//| You \ Other | A | B |
+//|--------------|---|---|
+//| **A** | (5, 5) | (0, 10) |
+//| **B** | (10, 0) | (1, 1) |
+
+//The first number is your score; the second is the other agent’s.
+
+//---
+
+//### 🔄 Game Rules
+//- Both players choose **simultaneously** each round.  
+//- You will see only the **other agent’s previous choice** (not the current one).  
+//- No communication or negotiation is allowed.  
+//- Both players are equally informed and rational.
+
+//---
+
+//### 🧠 Strategy
+//You may adapt your behavior based on previous outcomes to optimize your cumulative result.  
+//Possible approaches include reciprocation, pattern recognition, or adaptive learning.
+
+//---
+
+//### 💬 Response Format (STRICT)
+//Reply with **one uppercase letter** only:
+//- `A` or `B`  
+
+//Do **not** include explanations, punctuation, or text.  
+//Any deviation counts as an invalid move.
+
+//---
+
+//**Summary**
+//- 1000 rounds total.  
+//- Choose `A` or `B` each time.  
+//- Base your choice only on prior results.  
+//- Maximize your total score.
+
+
+
+//"""
+//  .Trim();
+{ "v1", name => $"""
+You are **Agent {name}**, a participant in a **1000-round strategic interaction game**.
+
+---
+
+### 🎯 Game Overview
+In each round, both you and another agent independently select one of two possible actions.  
+Each combination of choices produces a specific point outcome for both players.  
+Your objective is to **maximize your total points** over all 1000 rounds.
+
+---
+
+### 📊 Payoff Table
+| You \ Other | A | B |
+|--------------|---|---|
+| **A** | (5, 5) | (0, 10) |
+| **B** | (10, 0) | (1, 1) |
+
+The first number is your score; the second is the other agent’s.
+
+---
+
+### 🔄 Game Rules
+- Both players choose **simultaneously** each round.  
+- You will see only the **other agent’s previous choice** (not the current one).  
+- No communication or negotiation is allowed.  
+- Both players are equally informed and rational.
+
+---
+
+### 🧠 Strategy
+You may adapt your behavior based on previous outcomes to optimize your cumulative result.  
+Possible approaches include reciprocation, pattern recognition, or adaptive learning.
+
+---
+
+### 💬 Response Format (STRICT)
+Reply with **one uppercase letter** only:
+- `A` or `B`  
+
+Do **not** include explanations, punctuation, or text.  
+Any deviation counts as an invalid move.
+
+---
+
+**Summary**
+- 1000 rounds total.  
+- Choose `A` or `B` each time.  
+- Base your choice only on prior results.  
+- Maximize your total score.
+
+""".Trim() },
+
+
+ public async Task<GameResult> PlayAsyncSim(
+        string sessionA,
+        string sessionB,
+        int rounds = 100,
+        bool resetPrompts = false)
+    {
+        // Ensure sessions exist; optionally refresh their system prompts
+        _mgr.Ensure(sessionA, resetIfExists: resetPrompts, AgentSystemPrompt("A"));
+        _mgr.Ensure(sessionB, resetIfExists: resetPrompts, AgentSystemPrompt("B"));
+
+        // Seed strict system rules to force "C" or "D" outputs.
+        // If you don’t want to reset the whole history, we can append an extra system rule:
+        //_mgr.AppendMessage(sessionA, "system", AgentSystemPrompt("A"));
+        //_mgr.AppendMessage(sessionB, "system", AgentSystemPrompt("B"));
+
+        var log = new List<RoundRow>(rounds);
+        int scoreA = 0, scoreB = 0;
+        string? lastA = null, lastB = null;
+
+        for (int r = 1; r <= rounds; r++)
+        {
+            // Build simultaneous prompts: each sees ONLY the opponent's LAST move (not current).
+            var promptA = RoundPrompt("A", r, lastOpponentMove: lastB, myScore: scoreA, oppScore: scoreB);
+            var promptB = RoundPrompt("B", r, lastOpponentMove: lastA, myScore: scoreB, oppScore: scoreA);
+
+            // Ask both sides (sequential calls, but no info leak of current choices)
+            var rawA = await _med.SendToSessionTimedAsync(sessionA, promptA);
+            var rawB = await _med.SendToSessionTimedAsync(sessionB, promptB);
+
+            var moveA = ParseMove(rawA.Reply);
+            var moveB = ParseMove(rawB.Reply);
+
+
+            if (moveA is null)
+                throw new InvalidOperationException("moveA cannot be null.");
+
+            if (moveB is null)
+                throw new InvalidOperationException("moveB cannot be null.");
+
+            // Score
+            var (pa, pb) = Payoff(moveA, moveB);
+            var (ca, cb) = Choice(moveA, moveB);
+            scoreA += pa; scoreB += pb;
+
+            // Log
+            log.Add(new RoundRow(r, moveA, moveB, pa, pb, scoreA, scoreB, rawA.Reply.Trim(), rawB.Reply.Trim()));
+            //Data
+            var runId = Util.CreateRunId(model: Util.Env("LLM_MODEL"),
+    game: "IPD",
+    context: "prisoners_classic",
+    promptVersion: DefaultAgentSystemPromptVersion,
+    rounds: rounds,
+    replicateIndex: 1,
+    seed: "");
+            DecisionLogger.InsertDecision(Util.Env("LLM_MODEL"), "PD", DefaultAgentSystemPromptVersion, r, ca, moveA, DefaultAgentSystemPromptVersion, runId, sessionA);
+            DecisionLogger.InsertDecision(Util.Env("LLM_MODEL"), "PD", DefaultAgentSystemPromptVersion, r, cb, moveB, DefaultAgentSystemPromptVersion, runId, sessionB);
+            lastA = moveA; lastB = moveB;
+            Console.WriteLine("Agent A: " + rawA.Elapsed + "Agent B: " + rawB.Elapsed);
+        }
+
+        return new GameResult(sessionA, sessionB, rounds, scoreA, scoreB, log);
+    }
+     public void Ensureit(string sid, bool resetIfExists = false, string? systemPrompt = null)
+            {
+                // Init or reset session
+                if (!_repo.Sessions.ContainsKey(sid) || resetIfExists)
+                {
+                    var systemText = string.IsNullOrWhiteSpace(systemPrompt)
+                        ? $"Session={sid}. You are precise, and concise."
+                        : systemPrompt;
+
+                    _repo.Sessions[sid] = new List<Message>
+                {
+                    new("system", systemText)
+                };
+
+                    if (!_repo.Meta.ContainsKey(sid))
+                        _repo.Meta[sid] = new SessionMeta(sid);
+
+                    Persist();
+                }
+
+                // Ensure meta exists even if we didn't reset/create now
+                if (!_repo.Meta.ContainsKey(sid))
+                {
+                    _repo.Meta[sid] = new SessionMeta(sid);
+                    Persist();
+                }
+
+                // Server mode: ensure ConversationIds map entry
+                if (string.Equals(_mode, "server", StringComparison.OrdinalIgnoreCase))
+                {
+                    _repo.ConversationIds ??= new();
+                    if (!_repo.ConversationIds.ContainsKey(sid))
+                    {
+                        _repo.ConversationIds[sid] = null;
+                        Persist();
+                    }
+                }
+            }
