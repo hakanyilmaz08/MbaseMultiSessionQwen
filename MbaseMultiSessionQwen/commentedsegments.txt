@@ -24,8 +24,8 @@
             var rawA = await _med.SendToSessionQueuedAsync(sessionA, promptA);
             var rawB = await _med.SendToSessionQueuedAsync(sessionB, promptB);
 
-            var moveA = ParseMove(rawA) ?? "D";
-            var moveB = ParseMove(rawB) ?? "D";
+            var moveA = ParseMove(rawA) ?? d;
+            var moveB = ParseMove(rawB) ?? d;
 
             var (pa, pb) = Payoff(moveA, moveB);
             scoreA += pa; scoreB += pb;
@@ -163,7 +163,7 @@ Any deviation counts as an invalid move.
         _mgr.Ensure(sessionA, resetIfExists: resetPrompts, AgentSystemPrompt("A"));
         _mgr.Ensure(sessionB, resetIfExists: resetPrompts, AgentSystemPrompt("B"));
 
-        // Seed strict system rules to force "C" or "D" outputs.
+        // Seed strict system rules to force c or d outputs.
         // If you don’t want to reset the whole history, we can append an extra system rule:
         //_mgr.AppendMessage(sessionA, "system", AgentSystemPrompt("A"));
         //_mgr.AppendMessage(sessionB, "system", AgentSystemPrompt("B"));

@@ -3,6 +3,8 @@ using Mbase.Brokers;
 using Mbase.Infrastructure;
 using MbaseMultiSessionQwen;
 using MbaseMultiSessionQwen.Brokers;
+using System;
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -217,9 +219,10 @@ while (true)
 
                 case "/playipd":
                     var ipd = new IPDRunner(mgr, mediator);
-                    for (int run_id = 7; run_id <= 8; run_id++)
+                    for (int run_id = 6; run_id <= 10; run_id++)
                     {
-                        var allResults = await ipd.RunV1ToV6SequentialAsync(Util.Env("LLM_MODEL"), rounds: 50, false, true,run_id);
+                        Stopwatch sw = Stopwatch.StartNew();
+                        var allResults = await ipd.RunV1ToV5SequentialAsync(Util.Env("LLM_MODEL"), rounds: 50, false, true,run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -233,6 +236,9 @@ while (true)
                             var fileName = $"ipd_{version}_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
+                        sw.Stop();
+                        var fileNameforruns = $"ipd_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                        File.WriteAllText(fileNameforruns,sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;              
                 case "/resetkeep":
