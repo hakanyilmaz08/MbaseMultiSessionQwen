@@ -9,9 +9,14 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 
-var BASE_URL = Util.Env("LLM_BASE_URL");
-var API_KEY = Util.Env("LLM_API_KEY");
-var MODEL = Util.Env("LLM_MODEL");
+var models = ModelSettings.Load();
+if (models.Count == 0)
+    throw new InvalidOperationException("No models configured. Please set LLM_MODEL (and optional LLM_MODEL_A/LLM_MODEL_B) in your launch settings.");
+
+var primaryModel = models[0];
+var BASE_URL = string.IsNullOrWhiteSpace(primaryModel.BaseUrl) ? "http://localhost:8080" : primaryModel.BaseUrl;
+var API_KEY = primaryModel.ApiKey;
+var MODEL = primaryModel.Model;
 
 var STORE = Util.Env("SESSIONS_PATH");
 var SOFT_BUDGET = int.TryParse(Util.Env("SOFT_TOKEN_BUDGET"), out var b) ? b : 3200;
@@ -46,6 +51,7 @@ if (File.Exists(p))
 
 Console.OutputEncoding = Encoding.UTF8;
 Console.WriteLine($"Connecting to {BASE_URL} model={MODEL} mode={MODE}");
+Console.WriteLine($"Models configured: {ModelSettings.Describe(models)}");
 
 var jsonOpts = new JsonSerializerOptions
 {
@@ -66,7 +72,7 @@ if (!string.IsNullOrWhiteSpace(API_KEY))
     http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", API_KEY);
 var store = new InMemorySessionStore();
 
-var bootstrap = MbaseBrokerSetup.Build("http://localhost:8080");
+var bootstrap = MbaseBrokerSetup.Build(models);
 using var sp = bootstrap.Provider;             
 var broker = bootstrap.Broker;
 // broker=EchoBroker() or EchoBroker for test
@@ -81,7 +87,7 @@ var engine = new MbaseEngine(store, broker);
 //};
 
 var repo = SessionRepo.Load(STORE, jsonOpts);
-var mgr = new SessionManager(repo, engine, STORE, jsonOpts, SOFT_BUDGET, MODE);
+var mgr = new SessionManager(repo, engine, STORE, jsonOpts, SOFT_BUDGET, MODE, MODEL, models);
 var mediator = new SessionMediator(mgr);
 
 
@@ -104,7 +110,8 @@ void SyncSessionWithEngine(string sid)
         sys = list.FirstOrDefault(m => m.Role == "system")?.Content;
 
     // Create/update engine session (idempotent), storing system prompt & params
-    engine.CreateOrGet(sid, MODEL, systemPrompt: sys, temperature: meta.Temperature, topP: meta.TopP);
+    var model = mgr.GetModelForSession(sid);
+    engine.CreateOrGet(sid, model, systemPrompt: sys, temperature: meta.Temperature, topP: meta.TopP);
 }
   
 
@@ -207,7 +214,7 @@ while (true)
                     break;                
                 case "/where":
                     var meta = mgr.GetMeta(active!);
-                    Console.WriteLine($"session={active} temp={meta.Temperature} top_p={meta.TopP} convId={mgr.GetConversationId(active!)}");
+                    Console.WriteLine($"session={active} model={mgr.GetModelForSession(active!)} temp={meta.Temperature} top_p={meta.TopP} convId={mgr.GetConversationId(active!)}");
                     break;
 
                 case "/save":
@@ -216,10 +223,11 @@ while (true)
                     break;
 
                 case "/playipd":
-                    var ipd = new IPDRunner(mgr, mediator);
+                    var ipd = new IPDRunner(mgr, mediator, models);
+                    var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
                     for (int run_id = 7; run_id <= 8; run_id++)
                     {
-                        var allResults = await ipd.RunV1ToV6SequentialAsync(Util.Env("LLM_MODEL"), rounds: 50, false, true,run_id);
+                        var allResults = await ipd.RunV1ToV6SequentialAsync(runLabel, rounds: 50, false, true,run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -230,7 +238,7 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"ipd_{version}_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                            var fileName = $"ipd_{version}_{runLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                     }
@@ -284,7 +292,7 @@ while (true)
 public record Message([property: JsonPropertyName("role")] string Role,
                [property: JsonPropertyName("content")] string Content);
 
-public record SessionMeta(string Sid, double Temperature = 0.8, double TopP = 0.9);
+public record SessionMeta(string Sid, double Temperature = 0.8, double TopP = 0.9, string Model = "");
 
 
 
