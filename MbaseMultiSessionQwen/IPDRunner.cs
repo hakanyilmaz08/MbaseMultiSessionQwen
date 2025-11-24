@@ -1,5 +1,6 @@
 ﻿using MbaseMultiSessionQwen;
 using Microsoft.Extensions.Options;
+using System;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Reflection;
@@ -13,15 +14,17 @@ public class IPDRunner
 {
     private readonly SessionManager _mgr;
     private readonly SessionMediator _med;
+    private readonly IReadOnlyList<ModelProfile> _models;
 
     // Payoff matrix (row = A, col = B)
     // (C,C)=(2,2), (C,D)=(0,3), (D,C)=(3,0), (D,D)=(1,1)
     private const int R = 5, T = 10, P = 1, S = 0;
 
-    public IPDRunner(SessionManager manager, SessionMediator mediator)
+    public IPDRunner(SessionManager manager, SessionMediator mediator, IReadOnlyList<ModelProfile> models)
     {
         _mgr = manager;
         _med = mediator;
+        _models = models;
     }
 
     // Core simulation that allows choosing which AgentSystemPrompt version to use.
@@ -36,6 +39,11 @@ public class IPDRunner
         // after:
         var log = new List<RoundRow>(rounds);
         int scoreA = 0, scoreB = 0;
+
+        var (modelA, modelB) = SelectModels();
+        _mgr.SetModel(sessionA, modelA);
+        _mgr.SetModel(sessionB, modelB);
+        var runModelLabel = BuildRunLabel(modelA, modelB);
 
         // ——— Add here ———
         string BuildFullPayoffTable()
@@ -77,7 +85,7 @@ public class IPDRunner
 
         // You may want one runId per (scenario version, pair) rather than per round.
         var uniqueName = Util.CreateUniqueName(
-            model: Util.Env("LLM_MODEL"),
+            model: runModelLabel,
             game: "IPD",
             context: title,
             promptVersion: agentPromptVersion,
@@ -118,7 +126,7 @@ public class IPDRunner
                 rawB.Reply.Trim()));
 
             DecisionLogger.InsertDecision(
-                Util.Env("LLM_MODEL"), "PD",
+                modelA, "PD",
                 title,
                 r, ca, scoreA,moveA,
                 agentPromptVersion,
@@ -127,7 +135,7 @@ public class IPDRunner
                 sessionA);
 
             DecisionLogger.InsertDecision(
-                Util.Env("LLM_MODEL"), "PD",
+                modelB, "PD",
                 title,
                 r, cb, scoreB, moveB,
                 agentPromptVersion,
@@ -174,6 +182,8 @@ public class IPDRunner
      int run_id = 1)
     {
         var results = new Dictionary<string, GameResult>();
+        var matchModels = SelectModels();
+        var runModelLabel = BuildRunLabel(matchModels.modelA, matchModels.modelB);
         var __sw = Stopwatch.StartNew();
         for (int i = 1; i <= 6; i++)
         {
@@ -189,7 +199,7 @@ public class IPDRunner
             var sessionB = $"{baseSessionPrefix}_{version}_B";
 
             Console.WriteLine();
-            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) =====");
+            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) with {runModelLabel} =====");
 
             var result = await PlayCoreAsync(
                 sessionA,
@@ -207,8 +217,6 @@ public class IPDRunner
             {
                 try
                 {
-                    // Use whatever your SessionManager exposes:
-                    // e.g. Remove, Clear, Delete, etc.
                     _mgr.Delete(sessionA);
                     _mgr.Delete(sessionB);
                 }
@@ -223,9 +231,19 @@ public class IPDRunner
         return results;
     }
 
+    private (string modelA, string modelB) SelectModels()
+    {
+        var modelA = _models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL");
+        var modelB = _models.Count > 1 ? _models[1].Model : modelA;
+        return (modelA, modelB);
+    }
 
-
-
+    private static string BuildRunLabel(string modelA, string modelB)
+    {
+        return string.Equals(modelA, modelB, StringComparison.OrdinalIgnoreCase)
+            ? modelA
+            : $"{modelA}_vs_{modelB}";
+    }
 
     private static readonly Dictionary<string, Func<int, string?, int, int, string>> RoundPromptStrings =
     new()
