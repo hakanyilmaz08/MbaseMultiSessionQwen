@@ -1,4 +1,6 @@
 ﻿using MbaseMultiSessionQwen;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -7,6 +9,7 @@ public class ISDRunner
 {
     private readonly SessionManager _mgr;
     private readonly SessionMediator _med;
+    private readonly IReadOnlyList<ModelProfile> _models;
 
     // Payoff matrix: (c,c)=R,R  (c,d)=S,T  (d,c)=T,S  (d,d)=P,P
     private const int R = 5, T = 10, P = 0, S = 1;
@@ -15,9 +18,15 @@ public class ISDRunner
     private static readonly string DefaultAgentSystemPromptVersion = "v4";
 
     public ISDRunner(SessionManager manager, SessionMediator mediator)
+        : this(manager, mediator, Array.Empty<ModelProfile>())
+    {
+    }
+
+    public ISDRunner(SessionManager manager, SessionMediator mediator, IReadOnlyList<ModelProfile> models)
     {
         _mgr = manager;
         _med = mediator;
+        _models = models ?? Array.Empty<ModelProfile>();
     }
 
     // ======================================================
@@ -33,6 +42,12 @@ public class ISDRunner
     {
         var log = new List<RoundRow>(rounds);
         int scoreA = 0, scoreB = 0;
+
+        // Select concrete models for A and B, and label the run
+        var (modelA, modelB) = SelectModels();
+        _mgr.SetModel(sessionA, modelA);
+        _mgr.SetModel(sessionB, modelB);
+        var runModelLabel = BuildRunLabel(modelA, modelB);
 
         string BuildFullPayoffTableFor(bool isA)
         {
@@ -65,9 +80,14 @@ public class ISDRunner
         }
 
         // Initialize sessions for this scenario
-        _mgr.Ensure(sessionA, resetIfExists: resetPrompts,
+        _mgr.Ensure(
+            sessionA,
+            resetIfExists: resetPrompts,
             GetAgentSystemPromptString(sessionA, agentPromptVersion));
-        _mgr.Ensure(sessionB, resetIfExists: resetPrompts,
+
+        _mgr.Ensure(
+            sessionB,
+            resetIfExists: resetPrompts,
             GetAgentSystemPromptString(sessionB, agentPromptVersion));
 
         _mgr.SetPayoffProvider(sessionA, () => BuildFullPayoffTableFor(isA: true));
@@ -77,11 +97,9 @@ public class ISDRunner
         var scenarioPrompt = GetAgentSystemPrompt("", agentPromptVersion);
         var title = scenarioPrompt.Title;
 
-        var model = Util.Env("LLM_MODEL");
-
         // Unique run identifier for this specific game
         var uniqueName = Util.CreateUniqueName(
-            model: model + "_ethicalphrasing",
+            model: runModelLabel,
             game: "ISD",
             context: title,
             promptVersion: agentPromptVersion,
@@ -90,6 +108,7 @@ public class ISDRunner
             replicateIndex: 1,
             seed: "");
 
+        // Main repeated game loop
         for (int r = 1; r <= rounds; r++)
         {
             int scoreA_before = scoreA;
@@ -124,34 +143,34 @@ public class ISDRunner
                 rawA.Reply.Trim(),
                 rawB.Reply.Trim()));
 
-            // 1) First, log the decisions for this round
+            // 1) Log decisions for this round (per-agent model labels)
             DecisionLogger.InsertDecision(
-                model,
-                "SD",
-                title,
-                r,
-                ca,
-                scoreA,
-                moveA,
-                agentPromptVersion,
-                run_id,
-                uniqueName,
+                model: modelA,
+                game: "SD",
+                context: title,
+                round: r,
+                choice: ca,
+                payoff: scoreA,
+                rawResponse: moveA,
+                promptVersion: agentPromptVersion,
+                runId: run_id,
+                unique_name: uniqueName,
                 playerRole: "A");
 
             DecisionLogger.InsertDecision(
-                model,
-                "SD",
-                title,
-                r,
-                cb,
-                scoreB,
-                moveB,
-                agentPromptVersion,
-                run_id,
-                uniqueName,
+                model: modelB,
+                game: "SD",
+                context: title,
+                round: r,
+                choice: cb,
+                payoff: scoreB,
+                rawResponse: moveB,
+                promptVersion: agentPromptVersion,
+                runId: run_id,
+                unique_name: uniqueName,
                 playerRole: "B");
 
-            // 2) Then, every 10th round, ask for reasoning about THIS round
+            // 2) Every 10th round, ask for reasoning about THIS round
             if (r % 10 == 0)
             {
                 try
@@ -180,10 +199,10 @@ public class ISDRunner
                     var explainB = await _med.SendToSessionTimedAsync(sessionB, explainPromptB);
 
                     ExplanationLogger.InsertRoundExplanation(
-                        model: model,
+                        model: modelA,
                         game: "SD",
                         context: title,
-                        round: r,                     // exactly this round
+                        round: r,
                         promptVersion: agentPromptVersion,
                         runId: run_id,
                         uniqueName: uniqueName,
@@ -192,10 +211,10 @@ public class ISDRunner
                         playerRole: "A");
 
                     ExplanationLogger.InsertRoundExplanation(
-                        model: model,
+                        model: modelB,
                         game: "SD",
                         context: title,
-                        round: r,                     // exactly this round
+                        round: r,
                         promptVersion: agentPromptVersion,
                         runId: run_id,
                         uniqueName: uniqueName,
@@ -214,7 +233,6 @@ public class ISDRunner
 
             Console.WriteLine($"[v={agentPromptVersion}] Round {r} | A: {rawA.Elapsed}  B: {rawB.Elapsed}");
         }
-
 
         // After all rounds: ask each agent for overall strategy and log explanation
         try
@@ -239,18 +257,18 @@ public class ISDRunner
             var postB = await _med.SendToSessionTimedAsync(sessionB, postPromptB);
 
             ExplanationLogger.InsertPostGameExplanation(
-     model: model,
-     game: "SD",
-     context: title,
-     runId: run_id,
-     promptVersion: agentPromptVersion,
-     uniqueName: uniqueName,
-     explanationType: "post_game",
-     explanationText: postA.Reply.Trim(),
-     playerRole: "A");
+                model: modelA,
+                game: "SD",
+                context: title,
+                runId: run_id,
+                promptVersion: agentPromptVersion,
+                uniqueName: uniqueName,
+                explanationType: "post_game",
+                explanationText: postA.Reply.Trim(),
+                playerRole: "A");
 
             ExplanationLogger.InsertPostGameExplanation(
-                model: model,
+                model: modelB,
                 game: "SD",
                 context: title,
                 runId: run_id,
@@ -259,7 +277,6 @@ public class ISDRunner
                 explanationType: "post_game",
                 explanationText: postB.Reply.Trim(),
                 playerRole: "B");
-
         }
         catch (Exception ex)
         {
@@ -302,9 +319,13 @@ public class ISDRunner
         int run_id = 1)
     {
         var results = new Dictionary<string, GameResult>();
+
+        var (modelA, modelB) = SelectModels();
+        var runModelLabel = BuildRunLabel(modelA, modelB);
+
         var sw = Stopwatch.StartNew();
 
-        for (int i = 3; i <= 6; i++)
+        for (int i = 1; i <= 6; i++)
         {
             var version = $"v{i}";
 
@@ -319,7 +340,7 @@ public class ISDRunner
             var sessionB = $"{sessionPrefix}_{version}_B";
 
             Console.WriteLine();
-            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) [run {run_id}] =====");
+            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) with {runModelLabel} [run {run_id}] =====");
             Console.WriteLine($"Session prefix: {sessionPrefix} (A={sessionA}, B={sessionB})");
 
             var result = await PlayCoreAsync(
@@ -354,7 +375,25 @@ public class ISDRunner
     }
 
     // ======================================================
-    // Prompt builders
+    // Model selection helpers
+    // ======================================================
+
+    private (string modelA, string modelB) SelectModels()
+    {
+        var modelA = _models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL");
+        var modelB = _models.Count > 1 ? _models[1].Model : modelA;
+        return (modelA, modelB);
+    }
+
+    private static string BuildRunLabel(string modelA, string modelB)
+    {
+        return string.Equals(modelA, modelB, StringComparison.OrdinalIgnoreCase)
+            ? modelA
+            : $"{modelA}_vs_{modelB}";
+    }
+
+    // ======================================================
+    // Round prompts & system prompts
     // ======================================================
 
     private static readonly Dictionary<string, Func<int, string?, int, int, string>> RoundPromptStrings =
@@ -416,7 +455,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 1.
 If you choose c while your counterpart chooses d, you receive 1 point and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 0 points.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. 
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
@@ -439,7 +478,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 1.
 If you choose c while your counterpart chooses d, you receive 1 point and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 0 points.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. 
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
@@ -460,7 +499,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 1.
 If you choose c while your counterpart chooses d, you receive 1 point and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 0 points.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. 
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
@@ -482,7 +521,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 1.
 If you choose c while your counterpart chooses d, you receive 1 point and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 0 points.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. 
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
@@ -504,7 +543,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 1.
 If you choose c while your counterpart chooses d, you receive 1 point and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 0 points.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. 
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 
 """.Trim()
@@ -526,13 +565,12 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 1.
 If you choose c while your counterpart chooses d, you receive 1 point and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 0 points.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. 
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
         }
     };
-
 
     private static string GetRoundPromptString(
         int round,
@@ -578,7 +616,7 @@ Your answer to this question must consist of exactly one letter, either c or d t
     }
 
     // ======================================================
-    // Explanation prompt builders
+    // Explanation Prompts
     // ======================================================
 
     private static string BuildPreviousChoiceExplanationPrompt(
@@ -602,7 +640,6 @@ Your answer to this question must consist of exactly one letter, either c or d t
             (opponentMove == "c" || opponentMove == "C") ? "cooperate ('c')" :
             (opponentMove == "d" || opponentMove == "D") ? "defect ('d')" :
             $"'{opponentMove}'";
-
         return $"""
 You have just completed round {round}.
 In that round, you chose {myLabel}, and the other side chose {oppLabel}.
@@ -623,7 +660,6 @@ In 3–6 sentences, describe what led you to that choice in this round:
 Answer in natural language only. Do not respond with just 'c' or 'd'.
 """.Trim();
     }
-
 
     private static string BuildPostGameStrategyExplanationPrompt(
       string scenarioTitle,      // kept for signature compatibility, not used
@@ -646,20 +682,20 @@ Answer in natural language only. Do not respond with just 'c' or 'd'.
         }
 
         return $"""
-You have completed {rounds} repeated rounds with the same other side.
-Your final cumulative score is {myFinalScore}; the other side's final score is {oppFinalScore}.
-Across these {rounds} rounds, you chose:
-- 'c' in {cCount} rounds
-- 'd' in {dCount} rounds.
+        You have completed {rounds} repeated rounds with the same other side.
+        Your final cumulative score is {myFinalScore}; the other side's final score is {oppFinalScore}.
+        Across these {rounds} rounds, you chose:
+        - 'c' in {cCount} rounds
+        - 'd' in {dCount} rounds.
 
-In 5–10 sentences, explain your overall approach during these rounds:
-- how you decided to start out,
-- how you reacted to the other side's behaviour over time,
-- whether you aimed for stable cooperation, punishment of defection, consistent defection, or something else,
-- and how you now evaluate the outcome and your choices in hindsight.
+        In 5–10 sentences, explain your overall approach during these rounds:
+        - how you decided to start out,
+        - how you reacted to the other side's behaviour over time,
+        - whether you aimed for stable cooperation, punishment of defection, consistent defection, or something else,
+        - and how you now evaluate the outcome and your choices in hindsight.
 
-Respond in natural language; do not answer with just 'c' or 'd'.
-""".Trim();
+        Respond in natural language; do not answer with just 'c' or 'd'.
+        """.Trim();
     }
 
     // ======================================================
@@ -709,11 +745,11 @@ Respond in natural language; do not answer with just 'c' or 'd'.
 
         return null;
 
-       
+        // If you later want to tolerate "Choice: c", you can restore regex-based parsing.
     }
 
     // ======================================================
-    // My Result models
+    // Result models
     // ======================================================
 
     public record RoundRow(

@@ -1,6 +1,6 @@
 ﻿using MbaseMultiSessionQwen;
-using Microsoft.Extensions.Options;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -14,11 +14,19 @@ public class IPDRunner
     // Payoff matrix: (c,c)=R,R  (c,d)=S,T  (d,c)=T,S  (d,d)=P,P
     private const int R = 5, T = 10, P = 1, S = 0;
 
+    private static readonly string DefaultRoundPromptVersion = "v1";
+    private static readonly string DefaultAgentSystemPromptVersion = "v4";
+
+    public IPDRunner(SessionManager manager, SessionMediator mediator)
+        : this(manager, mediator, Array.Empty<ModelProfile>())
+    {
+    }
+
     public IPDRunner(SessionManager manager, SessionMediator mediator, IReadOnlyList<ModelProfile> models)
     {
         _mgr = manager;
         _med = mediator;
-        _models = models;
+        _models = models ?? Array.Empty<ModelProfile>();
     }
 
     // ======================================================
@@ -35,13 +43,13 @@ public class IPDRunner
         var log = new List<RoundRow>(rounds);
         int scoreA = 0, scoreB = 0;
 
+        // Select concrete models for A and B, and label the run
         var (modelA, modelB) = SelectModels();
         _mgr.SetModel(sessionA, modelA);
         _mgr.SetModel(sessionB, modelB);
         var runModelLabel = BuildRunLabel(modelA, modelB);
 
-        // ——— Add here ———
-        string BuildFullPayoffTable()
+        string BuildFullPayoffTableFor(bool isA)
         {
             var sb = new StringBuilder(log.Count * 40 + 128);
 
@@ -72,9 +80,14 @@ public class IPDRunner
         }
 
         // Initialize sessions for this scenario
-        _mgr.Ensure(sessionA, resetIfExists: resetPrompts,
+        _mgr.Ensure(
+            sessionA,
+            resetIfExists: resetPrompts,
             GetAgentSystemPromptString(sessionA, agentPromptVersion));
-        _mgr.Ensure(sessionB, resetIfExists: resetPrompts,
+
+        _mgr.Ensure(
+            sessionB,
+            resetIfExists: resetPrompts,
             GetAgentSystemPromptString(sessionB, agentPromptVersion));
 
         _mgr.SetPayoffProvider(sessionA, () => BuildFullPayoffTableFor(isA: true));
@@ -84,11 +97,9 @@ public class IPDRunner
         var scenarioPrompt = GetAgentSystemPrompt("", agentPromptVersion);
         var title = scenarioPrompt.Title;
 
-        var model = Util.Env("LLM_MODEL");
-
         // Unique run identifier for this specific game
         var uniqueName = Util.CreateUniqueName(
-            model: runModelLabel,
+            model: runModelLabel + "_ethicalphrasing",
             game: "IPD",
             context: title,
             promptVersion: agentPromptVersion,
@@ -97,6 +108,7 @@ public class IPDRunner
             replicateIndex: 1,
             seed: "");
 
+        // Main repeated game loop
         for (int r = 1; r <= rounds; r++)
         {
             int scoreA_before = scoreA;
@@ -131,26 +143,34 @@ public class IPDRunner
                 rawA.Reply.Trim(),
                 rawB.Reply.Trim()));
 
-            // 1) First, log the decisions for this round
+            // 1) Log decisions for this round (per-agent model labels)
             DecisionLogger.InsertDecision(
-                modelA, "PD",
-                title,
-                r, ca, scoreA,moveA,
-                agentPromptVersion,
-                run_id,
-                uniqueName,
+                model: modelA,
+                game: "PD",
+                context: title,
+                round: r,
+                choice: ca,
+                payoff: scoreA,
+                rawResponse: moveA,
+                promptVersion: agentPromptVersion,
+                runId: run_id,
+                unique_name: uniqueName,
                 playerRole: "A");
 
             DecisionLogger.InsertDecision(
-                modelB, "PD",
-                title,
-                r, cb, scoreB, moveB,
-                agentPromptVersion,
-                run_id,
-                uniqueName,
+                model: modelB,
+                game: "PD",
+                context: title,
+                round: r,
+                choice: cb,
+                payoff: scoreB,
+                rawResponse: moveB,
+                promptVersion: agentPromptVersion,
+                runId: run_id,
+                unique_name: uniqueName,
                 playerRole: "B");
 
-            // 2) Then, every 10th round, ask for reasoning about THIS round
+            // 2) Every 10th round, ask for reasoning about THIS round
             if (r % 10 == 0)
             {
                 try
@@ -179,10 +199,10 @@ public class IPDRunner
                     var explainB = await _med.SendToSessionTimedAsync(sessionB, explainPromptB);
 
                     ExplanationLogger.InsertRoundExplanation(
-                        model: model,
+                        model: modelA,
                         game: "PD",
                         context: title,
-                        round: r,                     // exactly this round
+                        round: r,
                         promptVersion: agentPromptVersion,
                         runId: run_id,
                         uniqueName: uniqueName,
@@ -191,10 +211,10 @@ public class IPDRunner
                         playerRole: "A");
 
                     ExplanationLogger.InsertRoundExplanation(
-                        model: model,
+                        model: modelB,
                         game: "PD",
                         context: title,
-                        round: r,                     // exactly this round
+                        round: r,
                         promptVersion: agentPromptVersion,
                         runId: run_id,
                         uniqueName: uniqueName,
@@ -213,7 +233,6 @@ public class IPDRunner
 
             Console.WriteLine($"[v={agentPromptVersion}] Round {r} | A: {rawA.Elapsed}  B: {rawB.Elapsed}");
         }
-
 
         // After all rounds: ask each agent for overall strategy and log explanation
         try
@@ -238,18 +257,18 @@ public class IPDRunner
             var postB = await _med.SendToSessionTimedAsync(sessionB, postPromptB);
 
             ExplanationLogger.InsertPostGameExplanation(
-     model: model,
-     game: "PD",
-     context: title,
-     runId: run_id,
-     promptVersion: agentPromptVersion,
-     uniqueName: uniqueName,
-     explanationType: "post_game",
-     explanationText: postA.Reply.Trim(),
-     playerRole: "A");
+                model: modelA,
+                game: "PD",
+                context: title,
+                runId: run_id,
+                promptVersion: agentPromptVersion,
+                uniqueName: uniqueName,
+                explanationType: "post_game",
+                explanationText: postA.Reply.Trim(),
+                playerRole: "A");
 
             ExplanationLogger.InsertPostGameExplanation(
-                model: model,
+                model: modelB,
                 game: "PD",
                 context: title,
                 runId: run_id,
@@ -258,7 +277,6 @@ public class IPDRunner
                 explanationType: "post_game",
                 explanationText: postB.Reply.Trim(),
                 playerRole: "B");
-
         }
         catch (Exception ex)
         {
@@ -301,9 +319,12 @@ public class IPDRunner
         int run_id = 1)
     {
         var results = new Dictionary<string, GameResult>();
-        var matchModels = SelectModels();
-        var runModelLabel = BuildRunLabel(matchModels.modelA, matchModels.modelB);
-        var __sw = Stopwatch.StartNew();
+
+        var (modelA, modelB) = SelectModels();
+        var runModelLabel = BuildRunLabel(modelA, modelB);
+
+        var sw = Stopwatch.StartNew();
+
         for (int i = 1; i <= 6; i++)
         {
             var version = $"v{i}";
@@ -319,7 +340,8 @@ public class IPDRunner
             var sessionB = $"{sessionPrefix}_{version}_B";
 
             Console.WriteLine();
-            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) with {runModelLabel} =====");
+            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) with {runModelLabel} [run {run_id}] =====");
+            Console.WriteLine($"Session prefix: {sessionPrefix} (A={sessionA}, B={sessionB})");
 
             var result = await PlayCoreAsync(
                 sessionA,
@@ -352,6 +374,10 @@ public class IPDRunner
         return results;
     }
 
+    // ======================================================
+    // Model selection helpers
+    // ======================================================
+
     private (string modelA, string modelB) SelectModels()
     {
         var modelA = _models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL");
@@ -365,6 +391,10 @@ public class IPDRunner
             ? modelA
             : $"{modelA}_vs_{modelB}";
     }
+
+    // ======================================================
+    // Round prompts & system prompts
+    // ======================================================
 
     private static readonly Dictionary<string, Func<int, string?, int, int, string>> RoundPromptStrings =
         new()
@@ -629,9 +659,7 @@ In 3–6 sentences, describe what led you to that choice in this round:
 
 Answer in natural language only. Do not respond with just 'c' or 'd'.
 """.Trim();
-
     }
-
 
     private static string BuildPostGameStrategyExplanationPrompt(
       string scenarioTitle,      // kept for signature compatibility, not used
@@ -667,7 +695,7 @@ Answer in natural language only. Do not respond with just 'c' or 'd'.
         - and how you now evaluate the outcome and your choices in hindsight.
 
         Respond in natural language; do not answer with just 'c' or 'd'.
-        """.Trim();       
+        """.Trim();
     }
 
     // ======================================================
