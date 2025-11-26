@@ -6,21 +6,24 @@ using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
+using System.Linq;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 public class ISDRunner
 {
     private readonly SessionManager _mgr;
     private readonly SessionMediator _med;
+    private readonly IReadOnlyList<ModelProfile> _models;
 
     // Payoff matrix (row = A, col = B)
     // (C,C)=(2,2), (C,D)=(0,3), (D,C)=(3,0), (D,D)=(1,1)
     private const int R = 5, T = 10, P = 1, S = 0;
 
-    public ISDRunner(SessionManager manager, SessionMediator mediator)
+    public ISDRunner(SessionManager manager, SessionMediator mediator, IReadOnlyList<ModelProfile> models)
     {
         _mgr = manager;
         _med = mediator;
+        _models = models;
     }
 
     // Core simulation that allows choosing which AgentSystemPrompt version to use.
@@ -29,8 +32,15 @@ public class ISDRunner
         string sessionB,
         int rounds,
         bool resetPrompts,
-        string agentPromptVersion)
+        string agentPromptVersion,
+        string? selectedModelA = null,
+        string? selectedModelB = null)
     {
+        var (modelA, modelB) = SelectModels(selectedModelA, selectedModelB);
+        _mgr.SetModel(sessionA, modelA);
+        _mgr.SetModel(sessionB, modelB);
+        var runModelLabel = BuildRunLabel(modelA, modelB);
+
         // Initialize sessions with the chosen scenario prompt
         _mgr.Ensure(sessionA, resetIfExists: resetPrompts, GetAgentSystemPromptString(sessionA, agentPromptVersion));
         _mgr.Ensure(sessionB, resetIfExists: resetPrompts, GetAgentSystemPromptString(sessionB, agentPromptVersion));
@@ -42,7 +52,7 @@ public class ISDRunner
 
         // You may want one runId per (scenario version, pair) rather than per round.
         var runId = Util.CreateUniqueName(
-            model: Util.Env("LLM_MODEL"),
+            model: runModelLabel,
             game: "ISD",
             context: title,
             promptVersion: agentPromptVersion,
@@ -82,7 +92,7 @@ public class ISDRunner
                 rawB.Reply.Trim()));
 
             DecisionLogger.InsertDecision(
-                Util.Env("LLM_MODEL"), "PD",
+                modelA, "PD",
                 title,
                 r, ca, scoreA, moveA,
                 agentPromptVersion,
@@ -90,7 +100,7 @@ public class ISDRunner
                 sessionA);
 
             DecisionLogger.InsertDecision(
-                Util.Env("LLM_MODEL"), "SD",
+                modelB, "SD",
                 title,
                 r, cb, scoreB, moveB,
                 agentPromptVersion,
@@ -134,6 +144,9 @@ public class ISDRunner
     {
         var results = new Dictionary<string, GameResult>();
 
+        var (modelA, modelB) = SelectModels();
+        var runModelLabel = BuildRunLabel(modelA, modelB);
+
         for (int i = 1; i <= 10; i++)
         {
             var version = $"v{i}";
@@ -148,14 +161,16 @@ public class ISDRunner
             var sessionB = $"{baseSessionPrefix}_{version}_B";
 
             Console.WriteLine();
-            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) =====");
+            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) with {runModelLabel} =====");
 
             var result = await PlayCoreAsync(
                 sessionA,
                 sessionB,
                 rounds,
                 resetPrompts,
-                version);
+                version,
+                modelA,
+                modelB);
 
             results[version] = result;
 
@@ -178,6 +193,26 @@ public class ISDRunner
         }
 
         return results;
+    }
+
+    private (string modelA, string modelB) SelectModels(string? preferredModelA = null, string? preferredModelB = null)
+    {
+        var modelA = preferredModelA ?? (_models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL"));
+
+        // Prefer a distinct second model when available (e.g., Qwen vs Llama).
+        var modelB = preferredModelB ?? _models
+            .Skip(1)
+            .Select(m => m.Model)
+            .FirstOrDefault(m => !string.Equals(m, modelA, StringComparison.OrdinalIgnoreCase))
+            ?? (_models.Count > 1 ? _models[1].Model : modelA);
+        return (modelA, modelB);
+    }
+
+    private static string BuildRunLabel(string modelA, string modelB)
+    {
+        return string.Equals(modelA, modelB, StringComparison.OrdinalIgnoreCase)
+            ? modelA
+            : $"{modelA}_vs_{modelB}";
     }
 
 

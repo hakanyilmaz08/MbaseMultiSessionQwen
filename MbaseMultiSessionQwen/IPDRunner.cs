@@ -8,6 +8,7 @@ using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
+using System.Linq;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 public class IPDRunner
@@ -34,13 +35,14 @@ public class IPDRunner
         int rounds,
         bool resetPrompts,
         string agentPromptVersion,
-        int run_id)
+        int run_id,
+        string? selectedModelA = null,
+        string? selectedModelB = null)
     {
+        var (modelA, modelB) = SelectModels(selectedModelA, selectedModelB);
         // after:
         var log = new List<RoundRow>(rounds);
         int scoreA = 0, scoreB = 0;
-
-        var (modelA, modelB) = SelectModels();
         _mgr.SetModel(sessionA, modelA);
         _mgr.SetModel(sessionB, modelB);
         var runModelLabel = BuildRunLabel(modelA, modelB);
@@ -182,8 +184,8 @@ public class IPDRunner
      int run_id = 1)
     {
         var results = new Dictionary<string, GameResult>();
-        var matchModels = SelectModels();
-        var runModelLabel = BuildRunLabel(matchModels.modelA, matchModels.modelB);
+        var (modelA, modelB) = SelectModels();
+        var runModelLabel = BuildRunLabel(modelA, modelB);
         var __sw = Stopwatch.StartNew();
         for (int i = 1; i <= 6; i++)
         {
@@ -207,7 +209,9 @@ public class IPDRunner
                 rounds,
                 resetPrompts,
                 version,
-                run_id);
+                run_id,
+                modelA,
+                modelB);
 
             results[version] = result;
 
@@ -231,14 +235,20 @@ public class IPDRunner
         return results;
     }
 
-    private (string modelA, string modelB) SelectModels()
+    internal (string modelA, string modelB) SelectModels(string? preferredModelA = null, string? preferredModelB = null)
     {
-        var modelA = _models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL");
-        var modelB = _models.Count > 1 ? _models[1].Model : modelA;
+        var modelA = preferredModelA ?? (_models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL"));
+
+        // Prefer a distinct second model when available (e.g., Qwen vs Llama).
+        var modelB = preferredModelB ?? _models
+            .Skip(1)
+            .Select(m => m.Model)
+            .FirstOrDefault(m => !string.Equals(m, modelA, StringComparison.OrdinalIgnoreCase))
+            ?? (_models.Count > 1 ? _models[1].Model : modelA);
         return (modelA, modelB);
     }
 
-    private static string BuildRunLabel(string modelA, string modelB)
+    internal static string BuildRunLabel(string modelA, string modelB)
     {
         return string.Equals(modelA, modelB, StringComparison.OrdinalIgnoreCase)
             ? modelA
