@@ -228,11 +228,11 @@ while (true)
                 case "/playipd":
                     var ipd = new IPDRunner(mgr, mediator, models);
                     var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
-                    
+
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
-                        var allResults = await ipd.RunV1ToV5SequentialAsync(Util.Env("LLM_MODEL"), rounds: 50, false, true,run_id);
+                        var allResults = await ipd.RunV1ToV5SequentialAsync(runLabel, rounds: 50, false, true, run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -243,20 +243,21 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"ipd_{version}_ethical_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                            var fileName = $"ipd_{version}_ethical_{runLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"ipd_ethicalv2_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                        var fileNameforruns = $"ipd_ethicalv2_{runLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns,sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
                 case "/playisd":
-                    var isd = new ISDRunner(mgr, mediator);
+                    var isd = new ISDRunner(mgr, mediator, models);
+                    var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
-                        var allResults = await isd.RunV1ToV5SequentialAsync(Util.Env("LLM_MODEL"), rounds: 50, false, true, run_id);
+                        var allResults = await isd.RunV1ToV5SequentialAsync(runLabel, rounds: 50, false, true, run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -267,17 +268,17 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"isd_{version}_ethicalv2_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                            var fileName = $"isd_{version}_ethicalv2_{runLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"isd_ethicalv2_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                        var fileNameforruns = $"isd_ethicalv2_{runLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
                 case "/playboth":
-                    var ipd2 = new IPDRunner(mgr, mediator);
-                    var isd2 = new ISDRunner(mgr, mediator);
+                    var ipd2 = new IPDRunner(mgr, mediator, models);
+                    var isd2 = new ISDRunner(mgr, mediator, models);
                     var runLabel2 = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
 
                     for (int run_id = 1; run_id <= 1; run_id++)
