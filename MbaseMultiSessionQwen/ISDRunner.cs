@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -38,6 +39,7 @@ public class ISDRunner
         int rounds,
         bool resetPrompts,
         string agentPromptVersion,
+        int run_id,
         string? selectedModelA = null,
         string? selectedModelB = null)
     {
@@ -52,12 +54,6 @@ public class ISDRunner
 
         var log = new List<RoundRow>(rounds);
         int scoreA = 0, scoreB = 0;
-
-        // Select concrete models for A and B, and label the run
-        var (modelA, modelB) = SelectModels();
-        _mgr.SetModel(sessionA, modelA);
-        _mgr.SetModel(sessionB, modelB);
-        var runModelLabel = BuildRunLabel(modelA, modelB);
 
         string BuildFullPayoffTableFor(bool isA)
         {
@@ -88,17 +84,6 @@ public class ISDRunner
 
             return sb.ToString();
         }
-
-        // Initialize sessions for this scenario
-        _mgr.Ensure(
-            sessionA,
-            resetIfExists: resetPrompts,
-            GetAgentSystemPromptString(sessionA, agentPromptVersion));
-
-        _mgr.Ensure(
-            sessionB,
-            resetIfExists: resetPrompts,
-            GetAgentSystemPromptString(sessionB, agentPromptVersion));
 
         _mgr.SetPayoffProvider(sessionA, () => BuildFullPayoffTableFor(isA: true));
         _mgr.SetPayoffProvider(sessionB, () => BuildFullPayoffTableFor(isA: false));
@@ -291,7 +276,9 @@ public class ISDRunner
                 rounds,
                 resetPrompts,
                 version,
-                run_id);
+                run_id,
+                modelA,
+                modelB);
 
             results[version] = result;
 
@@ -320,10 +307,15 @@ public class ISDRunner
     // Model selection helpers
     // ======================================================
 
-    private (string modelA, string modelB) SelectModels()
+    private (string modelA, string modelB) SelectModels(string? preferredModelA = null, string? preferredModelB = null)
     {
-        var modelA = _models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL");
-        var modelB = _models.Count > 1 ? _models[1].Model : modelA;
+        var modelA = preferredModelA ?? (_models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL"));
+
+        var modelB = preferredModelB ?? _models
+            .Skip(1)
+            .Select(m => m.Model)
+            .FirstOrDefault(m => !string.Equals(m, modelA, StringComparison.OrdinalIgnoreCase))
+            ?? (_models.Count > 1 ? _models[1].Model : modelA);
         return (modelA, modelB);
     }
 
