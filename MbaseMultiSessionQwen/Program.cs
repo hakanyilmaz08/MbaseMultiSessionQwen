@@ -226,6 +226,7 @@ while (true)
                     break;
 
                 case "/playipd":
+                {
                     var ipd = new IPDRunner(mgr, mediator, models);
                     var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
 
@@ -251,7 +252,9 @@ while (true)
                         File.WriteAllText(fileNameforruns,sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
+                }
                 case "/playisd":
+                {
                     var isd = new ISDRunner(mgr, mediator, models);
                     var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
                     for (int run_id = 1; run_id <= 1; run_id++)
@@ -276,7 +279,9 @@ while (true)
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
+                }
                 case "/playboth":
+                {
                     var ipd2 = new IPDRunner(mgr, mediator, models);
                     var isd2 = new ISDRunner(mgr, mediator, models);
                     var runLabel2 = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
@@ -324,6 +329,7 @@ while (true)
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
+                }
                 case "/resetkeep":
                     engine.Reset(active!, keepSystemPrompt: true);
                     Console.WriteLine("history cleared; system prompt kept.");
