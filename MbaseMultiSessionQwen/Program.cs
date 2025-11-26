@@ -228,7 +228,7 @@ while (true)
                 case "/playipd":
                 {
                     var ipd = new IPDRunner(mgr, mediator, models);
-                    var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
+                    var runLabel = string.Empty;
 
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
@@ -256,7 +256,7 @@ while (true)
                 case "/playisd":
                 {
                     var isd = new ISDRunner(mgr, mediator, models);
-                    var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
+                    var runLabel = string.Empty;
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
@@ -284,7 +284,7 @@ while (true)
                 {
                     var ipd2 = new IPDRunner(mgr, mediator, models);
                     var isd2 = new ISDRunner(mgr, mediator, models);
-                    var runLabel2 = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
+                    var runLabel2 = string.Empty;
 
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
