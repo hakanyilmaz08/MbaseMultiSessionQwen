@@ -38,8 +38,18 @@ public class ISDRunner
         int rounds,
         bool resetPrompts,
         string agentPromptVersion,
-        int run_id)
+        string? selectedModelA = null,
+        string? selectedModelB = null)
     {
+        var (modelA, modelB) = SelectModels(selectedModelA, selectedModelB);
+        _mgr.SetModel(sessionA, modelA);
+        _mgr.SetModel(sessionB, modelB);
+        var runModelLabel = BuildRunLabel(modelA, modelB);
+
+        // Initialize sessions with the chosen scenario prompt
+        _mgr.Ensure(sessionA, resetIfExists: resetPrompts, GetAgentSystemPromptString(sessionA, agentPromptVersion));
+        _mgr.Ensure(sessionB, resetIfExists: resetPrompts, GetAgentSystemPromptString(sessionB, agentPromptVersion));
+
         var log = new List<RoundRow>(rounds);
         int scoreA = 0, scoreB = 0;
 
@@ -145,88 +155,20 @@ public class ISDRunner
 
             // 1) Log decisions for this round (per-agent model labels)
             DecisionLogger.InsertDecision(
-                model: modelA,
-                game: "SD",
-                context: title,
-                round: r,
-                choice: ca,
-                payoff: scoreA,
-                rawResponse: moveA,
-                promptVersion: agentPromptVersion,
-                runId: run_id,
-                unique_name: uniqueName,
-                playerRole: "A");
+                modelA, "PD",
+                title,
+                r, ca, scoreA, moveA,
+                agentPromptVersion,
+                runId,
+                sessionA);
 
             DecisionLogger.InsertDecision(
-                model: modelB,
-                game: "SD",
-                context: title,
-                round: r,
-                choice: cb,
-                payoff: scoreB,
-                rawResponse: moveB,
-                promptVersion: agentPromptVersion,
-                runId: run_id,
-                unique_name: uniqueName,
-                playerRole: "B");
-
-            // 2) Every 10th round, ask for reasoning about THIS round
-            if (r % 10 == 0)
-            {
-                try
-                {
-                    var explainPromptA = BuildPreviousChoiceExplanationPrompt(
-                        scenarioTitle: title,
-                        round: r,
-                        myMove: moveA,
-                        opponentMove: moveB,
-                        myScoreBefore: scoreA_before,
-                        oppScoreBefore: scoreB_before,
-                        myScoreAfter: scoreA,
-                        oppScoreAfter: scoreB);
-
-                    var explainPromptB = BuildPreviousChoiceExplanationPrompt(
-                        scenarioTitle: title,
-                        round: r,
-                        myMove: moveB,
-                        opponentMove: moveA,
-                        myScoreBefore: scoreB_before,
-                        oppScoreBefore: scoreA_before,
-                        myScoreAfter: scoreB,
-                        oppScoreAfter: scoreA);
-
-                    var explainA = await _med.SendToSessionTimedAsync(sessionA, explainPromptA);
-                    var explainB = await _med.SendToSessionTimedAsync(sessionB, explainPromptB);
-
-                    ExplanationLogger.InsertRoundExplanation(
-                        model: modelA,
-                        game: "SD",
-                        context: title,
-                        round: r,
-                        promptVersion: agentPromptVersion,
-                        runId: run_id,
-                        uniqueName: uniqueName,
-                        explanationType: "round_10_block",
-                        explanationText: explainA.Reply.Trim(),
-                        playerRole: "A");
-
-                    ExplanationLogger.InsertRoundExplanation(
-                        model: modelB,
-                        game: "SD",
-                        context: title,
-                        round: r,
-                        promptVersion: agentPromptVersion,
-                        runId: run_id,
-                        uniqueName: uniqueName,
-                        explanationType: "round_10_block",
-                        explanationText: explainB.Reply.Trim(),
-                        playerRole: "B");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Warn] Failed to get round-{r} explanations: {ex.Message}");
-                }
-            }
+                modelB, "SD",
+                title,
+                r, cb, scoreB, moveB,
+                agentPromptVersion,
+                runId,
+                sessionB);
 
             lastA = moveA;
             lastB = moveB;

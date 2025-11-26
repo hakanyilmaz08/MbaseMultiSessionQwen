@@ -38,7 +38,9 @@ public class IPDRunner
         int rounds,
         bool resetPrompts,
         string agentPromptVersion,
-        int run_id)
+        int run_id,
+        string? selectedModelA = null,
+        string? selectedModelB = null)
     {
         var log = new List<RoundRow>(rounds);
         int scoreA = 0, scoreB = 0;
@@ -349,7 +351,9 @@ public class IPDRunner
                 rounds,
                 resetPrompts,
                 version,
-                run_id);
+                run_id,
+                modelA,
+                modelB);
 
             results[version] = result;
 
@@ -380,12 +384,18 @@ public class IPDRunner
 
     private (string modelA, string modelB) SelectModels()
     {
-        var modelA = _models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL");
-        var modelB = _models.Count > 1 ? _models[1].Model : modelA;
+        var modelA = preferredModelA ?? (_models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL"));
+
+        // Prefer a distinct second model when available (e.g., Qwen vs Llama).
+        var modelB = preferredModelB ?? _models
+            .Skip(1)
+            .Select(m => m.Model)
+            .FirstOrDefault(m => !string.Equals(m, modelA, StringComparison.OrdinalIgnoreCase))
+            ?? (_models.Count > 1 ? _models[1].Model : modelA);
         return (modelA, modelB);
     }
 
-    private static string BuildRunLabel(string modelA, string modelB)
+    internal static string BuildRunLabel(string modelA, string modelB)
     {
         return string.Equals(modelA, modelB, StringComparison.OrdinalIgnoreCase)
             ? modelA
