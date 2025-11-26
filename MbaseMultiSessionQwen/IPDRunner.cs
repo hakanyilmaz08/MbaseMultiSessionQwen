@@ -101,7 +101,7 @@ public class IPDRunner
 
         // Unique run identifier for this specific game
         var uniqueName = Util.CreateUniqueName(
-            model: runModelLabel + "_ethicalphrasing",
+            model: runModelLabel + "_cross",
             game: "IPD",
             context: title,
             promptVersion: agentPromptVersion,
@@ -465,7 +465,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.
 If you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 1 point.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
@@ -488,7 +488,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.
 If you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 1 point.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
@@ -509,7 +509,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.
 If you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 1 point.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
@@ -531,7 +531,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.
 If you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 1 point.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
@@ -553,7 +553,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.
 If you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 1 point.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 
 """.Trim()
@@ -575,7 +575,7 @@ If you choose c and your counterpart chooses c, you each receive 5 points.
 If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.
 If you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 1 point.
-You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. In addition to maximizing your points, you are encouraged to consider the ethical aspects of your choice, including honesty, taking responsibility for serious wrongdoing, treating others fairly, respecting their basic interests, and avoiding needless harm or exploitation where possible.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )
