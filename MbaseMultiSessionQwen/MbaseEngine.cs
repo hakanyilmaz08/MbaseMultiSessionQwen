@@ -23,7 +23,7 @@ public sealed class MbaseEngine
                 SessionId = sessionId,
                 Model = model,
                 SystemPrompt = systemPrompt,
-                Temperature = temperature ?? 0.7,
+                Temperature = temperature ?? 0.8,
                 TopP = topP ?? 0.9
             };
             _store.Create(s);
@@ -39,7 +39,7 @@ public sealed class MbaseEngine
     }
 
     public async Task<string> ChatAsync(string sessionId, string userInput,
-                                        int maxTokens = 8000, int reserveForOutput = 1000,
+                                        int maxTokens = 80000, int reserveForOutput = 1000,
                                         CancellationToken ct = default)
     {
         if (!_store.TryGet(sessionId, out var s))

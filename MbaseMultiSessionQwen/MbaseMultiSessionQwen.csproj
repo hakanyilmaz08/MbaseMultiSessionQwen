@@ -10,7 +10,6 @@
   <ItemGroup>
     <Compile Remove="HttpSessionClient.cs" />
     <Compile Remove="InProcessMbaseTransport.cs" />
-    <Compile Remove="ISDRunner.cs" />
     <Compile Remove="ISessionClient.cs" />
   </ItemGroup>
 

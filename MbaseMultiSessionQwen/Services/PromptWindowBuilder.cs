@@ -4,7 +4,7 @@ namespace Mbase.Services;
 
 public static class PromptWindowBuilder
 {
-    public static IReadOnlyList<ChatMessage> Build(SessionState s, int maxTokens = 8_000, int reserveForOutput = 1_000)
+    public static IReadOnlyList<ChatMessage> Build(SessionState s, int maxTokens = 80_000, int reserveForOutput = 1_000)
     {
         var kept = new List<ChatMessage>();
         int budget = Math.Max(1, maxTokens - reserveForOutput);

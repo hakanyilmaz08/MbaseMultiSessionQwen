@@ -27,6 +27,7 @@ public class SessionManager
     {
         _repo = repo; _engine = engine; _storePath = storePath; _opts = opts; _softBudget = softBudget; _mode = mode;
 
+        // Default to sending the full message history to the server unless explicitly opting into compaction
         _compactSend = (Util.DetectEnv("COMPACT_SEND", "true")).Equals("true", StringComparison.OrdinalIgnoreCase);
         _compactLastPairs = int.TryParse(Util.DetectEnv("COMPACT_LAST_PAIRS", "6"), out var lp) ? Math.Max(1, lp) : 6;
         _includeBaselineSystem = !(Util.DetectEnv("COMPACT_INCLUDE_BASELINE_SYSTEM", "true").Equals("false", StringComparison.OrdinalIgnoreCase));
@@ -166,7 +167,9 @@ public class SessionManager
             session.Add(new Message("user", userText));
 
             // 2) KV rotation policy (count AFTER appending)
-            var clearEvery = int.TryParse(Util.DetectEnv("CLEAR_KV_EVERY", "10"), out var ce) ? Math.Max(0, ce) : 6;
+            var clearEveryDefault = _compactSend ? "10" : "0";
+            var clearEvery = int.TryParse(Util.DetectEnv("CLEAR_KV_EVERY", clearEveryDefault), out var ce) ? Math.Max(0, ce) : 6;
+            //var clearEvery = int.TryParse(Util.DetectEnv("CLEAR_KV_EVERY", "10"), out var ce) ? Math.Max(0, ce) : 6;
             var userTurns = CountUserTurns(sid);
             var renewNow = (clearEvery > 0 && userTurns > 0 && (userTurns % clearEvery) == 0);
             if (renewNow)
@@ -179,6 +182,8 @@ public class SessionManager
             List<Message> payload = string.Equals(_mode, "server", StringComparison.OrdinalIgnoreCase)
                 ? new List<Message> { session[^1] }                           // only newest user
                 : (_compactSend ? BuildCompactMessagesForSend(sidN) : session);
+            //List<Message> payload = _compactSend ? BuildCompactMessagesForSend(sidN) : session;
+
 
             var knownConvId = GetConversationId(sid);
             LogContext(sid, sessionCount: session.Count, knownConvId);

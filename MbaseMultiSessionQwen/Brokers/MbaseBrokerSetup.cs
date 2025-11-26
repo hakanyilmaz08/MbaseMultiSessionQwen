@@ -37,7 +37,7 @@ public static class MbaseBrokerSetup
         // Minimal routing config – adjust to your models/backends
         services.Configure<MbaseBrokerOptions>(o =>
         {
-            o.TimeoutSeconds = 60;
+            o.TimeoutSeconds = 600;
             o.DefaultMaxTokens = 1024;
             o.Routes = new(StringComparer.OrdinalIgnoreCase) // <= case-insensitive
             {

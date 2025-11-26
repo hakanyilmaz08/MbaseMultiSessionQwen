@@ -1,10 +1,10 @@
 ﻿using Microsoft.Data.Sqlite;
 
+
 public static class DbInit
 {
     private const string ConnectionString = "Data Source=ipd_results.db";
 
- 
     public static void EnsureCreated()
     {
         using var connection = new SqliteConnection(ConnectionString);
@@ -32,7 +32,6 @@ public static class DbInit
             pair_id TEXT,
 
             timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-            
         );
 
         CREATE INDEX IF NOT EXISTS idx_decisions_run_id
@@ -40,6 +39,23 @@ public static class DbInit
 
         CREATE INDEX IF NOT EXISTS idx_decisions_model_game_ctx
             ON decisions (model, game, context);
+
+        -- Explanations table, FK -> decisions.id
+        CREATE TABLE IF NOT EXISTS decision_explanations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            decision_id INTEGER NOT NULL,
+            explanation_type TEXT NOT NULL,  -- 'round_10_block', 'post_game', etc.
+            round INTEGER,                   -- NULL for post_game explanations
+            explanation TEXT NOT NULL,
+            timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+
+            FOREIGN KEY (decision_id)
+                REFERENCES decisions(id)
+                ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_decision_explanations_decision_id
+            ON decision_explanations (decision_id);
         ";
 
         using var command = connection.CreateCommand();
@@ -47,38 +63,5 @@ public static class DbInit
         command.ExecuteNonQuery();
     }
 
-    /// <summary>
-    /// Drops the 'decisions' table if it exists. 
-    /// Use for resetting the schema during development.
-    /// </summary>
-    public static void DropDecisionsTable()
-    {
-        using var connection = new SqliteConnection(ConnectionString);
-        connection.Open();
-
-        const string sql = @"DROP TABLE IF EXISTS decisions;";
-
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        command.ExecuteNonQuery();
-    }
-
-
-
-public static void EnsureAltered()
-    {
-        using var connection = new SqliteConnection(ConnectionString);
-        connection.Open();
-
-        var cmdText = @"
-      
-ALTER TABLE decisions ADD COLUMN round INTEGER;
-ALTER TABLE decisions ADD COLUMN pair_id TEXT;
-        ";
-
-        using var command = connection.CreateCommand();
-        command.CommandText = cmdText;
-        command.ExecuteNonQuery();
-    }
-    
+    // your DropDecisionsTable / EnsureAltered can stay as-is or be retired
 }
