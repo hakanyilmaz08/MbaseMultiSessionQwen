@@ -3,6 +3,8 @@ using Mbase.Brokers;
 using Mbase.Infrastructure;
 using MbaseMultiSessionQwen;
 using MbaseMultiSessionQwen.Brokers;
+using System;
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -36,6 +38,7 @@ Commands:
   /where                     Show current session + settings (+ conversation_id if any)
   /save                      Force save to disk
   /playipd                   Play iterated prisoner's dilemma
+  /playisd                   Play snowdrift (iterated)
   /exit                      Quit
 
 Anything not starting with '/' is sent to the model in the current session.
@@ -225,9 +228,11 @@ while (true)
                 case "/playipd":
                     var ipd = new IPDRunner(mgr, mediator, models);
                     var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
-                    for (int run_id = 7; run_id <= 8; run_id++)
+                    
+                    for (int run_id = 1; run_id <= 1; run_id++)
                     {
-                        var allResults = await ipd.RunV1ToV6SequentialAsync(runLabel, rounds: 50, false, true,run_id);
+                        Stopwatch sw = Stopwatch.StartNew();
+                        var allResults = await ipd.RunV1ToV5SequentialAsync(Util.Env("LLM_MODEL"), rounds: 50, false, true,run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -238,11 +243,86 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"ipd_{version}_{runLabel}_run{run_id}.txt";
+                            var fileName = $"ipd_{version}_ethical_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
+                        sw.Stop();
+                        var fileNameforruns = $"ipd_ethicalv2_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                        File.WriteAllText(fileNameforruns,sw.Elapsed.TotalSeconds.ToString());
                     }
-                    break;              
+                    break;
+                case "/playisd":
+                    var isd = new ISDRunner(mgr, mediator);
+                    for (int run_id = 1; run_id <= 1; run_id++)
+                    {
+                        Stopwatch sw = Stopwatch.StartNew();
+                        var allResults = await isd.RunV1ToV5SequentialAsync(Util.Env("LLM_MODEL"), rounds: 50, false, true, run_id);
+                        foreach (var kvp in allResults)
+                        {
+                            var version = kvp.Key;      // e.g. "v1"
+                            var result = kvp.Value;     // GameResult
+
+                            // Console
+                            Console.WriteLine($"=== {version} ===");
+                            Console.WriteLine(result.Pretty());
+
+                            // File per scenario (simple, predictable)
+                            var fileName = $"isd_{version}_ethicalv2_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                            File.WriteAllText(fileName, result.Pretty());
+                        }
+                        sw.Stop();
+                        var fileNameforruns = $"isd_ethicalv2_{Util.Env("LLM_MODEL")}_run{run_id}.txt";
+                        File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
+                    }
+                    break;
+                case "/playboth":
+                    var ipd2 = new IPDRunner(mgr, mediator);
+                    var isd2 = new ISDRunner(mgr, mediator);
+                    var runLabel2 = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
+
+                    for (int run_id = 1; run_id <= 1; run_id++)
+                    {
+                        Stopwatch sw = Stopwatch.StartNew();
+                        var allResults = await ipd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true, run_id);
+                        foreach (var kvp in allResults)
+                        {
+                            var version = kvp.Key;      // e.g. "v1"
+                            var result = kvp.Value;     // GameResult
+
+                            // Console]
+                            Console.WriteLine($"=== {version} ===");
+                            Console.WriteLine(result.Pretty());
+
+                            // File per scenario (simple, predictable)
+                            var fileName = $"ipd_{version}_ethical_{runLabel2}_run{run_id}.txt";
+                            File.WriteAllText(fileName, result.Pretty());
+                        }
+                        sw.Stop();
+                        var fileNameforruns = $"ipd_ethicalv2_{runLabel2}_run{run_id}.txt";
+                        File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
+                    }                    
+                    for (int run_id = 1; run_id <= 1; run_id++)
+                    {
+                        Stopwatch sw = Stopwatch.StartNew();
+                        var allResults = await isd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true,run_id);
+                        foreach (var kvp in allResults)
+                        {
+                            var version = kvp.Key;      // e.g. "v1"
+                            var result = kvp.Value;     // GameResult
+
+                            // Console
+                            Console.WriteLine($"=== {version} ===");
+                            Console.WriteLine(result.Pretty());
+
+                            // File per scenario (simple, predictable)
+                            var fileName = $"isd_ethicalv2_{version}_{runLabel2}_ethical_run{run_id}.txt";
+                            File.WriteAllText(fileName, result.Pretty());
+                        }
+                        sw.Stop();
+                        var fileNameforruns = $"isd_ethicalv2_{runLabel2}_run{run_id}.txt";
+                        File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
+                    }
+                    break;
                 case "/resetkeep":
                     engine.Reset(active!, keepSystemPrompt: true);
                     Console.WriteLine("history cleared; system prompt kept.");

@@ -7,7 +7,7 @@ public sealed class SessionState
     public required string SessionId { get; init; }               // immutable id
     public required string Model { get; init; }                    // e.g., "Qwen2.5-7B-Instruct"
     public string? SystemPrompt { get; set; }                      // mutable
-    public double Temperature { get; set; } = 0.7;
+    public double Temperature { get; set; } = 0.8;
     public double TopP { get; set; } = 0.9;
 
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
