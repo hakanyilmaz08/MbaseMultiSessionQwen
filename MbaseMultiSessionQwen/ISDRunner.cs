@@ -94,7 +94,7 @@ public class ISDRunner
 
         // Unique run identifier for this specific game
         var uniqueName = Util.CreateUniqueName(
-            model: runModelLabel,
+            model: runModelLabel+ "_cross",
             game: "ISD",
             context: title,
             promptVersion: agentPromptVersion,
