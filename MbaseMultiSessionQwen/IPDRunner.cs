@@ -46,7 +46,7 @@ public class IPDRunner
         int scoreA = 0, scoreB = 0;
 
         // Select concrete models for A and B, and label the run
-        var (modelA, modelB) = SelectModels();
+        var (modelA, modelB) = SelectModels(selectedModelA, selectedModelB);
         _mgr.SetModel(sessionA, modelA);
         _mgr.SetModel(sessionB, modelB);
         var runModelLabel = BuildRunLabel(modelA, modelB);
@@ -382,7 +382,7 @@ public class IPDRunner
     // Model selection helpers
     // ======================================================
 
-    private (string modelA, string modelB) SelectModels()
+    private (string modelA, string modelB) SelectModels(string? preferredModelA = null, string? preferredModelB = null)
     {
         var modelA = preferredModelA ?? (_models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL"));
 
