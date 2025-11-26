@@ -13,6 +13,8 @@ public class SessionManager
     private readonly JsonSerializerOptions _opts;
     private readonly int _softBudget;
     private readonly string _mode; // client | server
+    private readonly string _defaultModel;
+    private readonly Dictionary<string, ModelProfile> _models;
 
     private readonly bool _compactSend;
     private readonly int _compactLastPairs;
@@ -22,10 +24,14 @@ public class SessionManager
     private readonly ConcurrentDictionary<string, Func<string>> _payoffProviders = new();
 
     
-
-    public SessionManager(SessionRepo repo, MbaseEngine engine, string storePath, JsonSerializerOptions opts, int softBudget, string mode)
+    public SessionManager(SessionRepo repo, MbaseEngine engine, string storePath, JsonSerializerOptions opts, int softBudget, string mode, string defaultModel, IEnumerable<ModelProfile>? knownModels = null)
     {
         _repo = repo; _engine = engine; _storePath = storePath; _opts = opts; _softBudget = softBudget; _mode = mode;
+        _defaultModel = defaultModel;
+        _models = (knownModels ?? Array.Empty<ModelProfile>())
+            .GroupBy(m => m.Model, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToDictionary(m => m.Model, m => m, StringComparer.OrdinalIgnoreCase);
 
         // Default to sending the full message history to the server unless explicitly opting into compaction
         _compactSend = (Util.DetectEnv("COMPACT_SEND", "true")).Equals("true", StringComparison.OrdinalIgnoreCase);
@@ -63,7 +69,12 @@ public class SessionManager
         // Ensure meta
         if (!_repo.Meta.ContainsKey(sid))
         {
-            _repo.Meta[sid] = new SessionMeta(sid);
+            _repo.Meta[sid] = new SessionMeta(sid, Model: _defaultModel);
+            changed = true;
+        }
+        else if (string.IsNullOrWhiteSpace(_repo.Meta[sid].Model))
+        {
+            _repo.Meta[sid] = _repo.Meta[sid] with { Model = _defaultModel };
             changed = true;
         }
 
@@ -92,6 +103,13 @@ public class SessionManager
             _repo.Meta[sid] = m;
             Persist();
         }
+        if (string.IsNullOrWhiteSpace(m.Model))
+        {
+            m = m with { Model = _defaultModel };
+            _repo.Meta[sid] = m;
+            Persist();
+        }
+
         return m;
     }
 
@@ -103,6 +121,27 @@ public class SessionManager
             && _repo.ConversationIds.TryGetValue(sid, out var v)
             ? v
             : null;
+    }
+
+    public void SetModel(string sid, string model)
+    {
+        Ensure(sid);
+        _repo.Meta[sid] = _repo.Meta[sid] with { Model = ResolveModel(model) };
+        Persist();
+    }
+
+    public string GetModelForSession(string sid)
+    {
+        Ensure(sid);
+        var meta = _repo.Meta[sid];
+        var model = ResolveModel(meta.Model);
+
+        if (_models.Count > 0 && !_models.ContainsKey(model))
+        {
+            Console.WriteLine($"[warn] model '{model}' not found in configured list: {string.Join(", ", _models.Keys)}");
+        }
+
+        return model;
     }
 
     public void SetTemp(string sid, double t) { Ensure(sid); _repo.Meta[sid] = _repo.Meta[sid] with { Temperature = t }; Persist(); }
@@ -189,7 +228,7 @@ public class SessionManager
             LogContext(sid, sessionCount: session.Count, knownConvId);
 
             // 4) Ensure engine session (idempotent) and keep prompt/params in engine
-            var modelName = Util.DetectEnv("LLM_MODEL", "Qwen2.5 7B Instruct");
+            var modelName = GetModelForSession(sid);
             var systemPrompt = session.FirstOrDefault(m => m.Role == "system")?.Content;
             _engine.CreateOrGet(
                 sessionId: engineSid,
@@ -279,10 +318,17 @@ public class SessionManager
 
     private void LogContext(string sid, int sessionCount, string? knownConvId)
     {
+        var model = GetModelForSession(sid);
+        var baseUrl = _models.TryGetValue(model, out var prof) ? prof.BaseUrl : Util.Env("LLM_BASE_URL");
         Console.Error.WriteLine(
-            $"[Context] mode={_mode}, sid={sid}, model={Util.Env("LLM_MODEL")}, baseUrl={Util.Env("LLM_BASE_URL")}, " +
+            $"[Context] mode={_mode}, sid={sid}, model={model}, baseUrl={baseUrl}, " +
             $"convId={(knownConvId ?? "<null>")}, sessionCount={sessionCount}, topP={(_repo.Meta.TryGetValue(sid, out var m) ? m.TopP : double.NaN)}, temp={(_repo.Meta.TryGetValue(sid, out var m2) ? m2.Temperature : double.NaN)}"
         );
+    }
+
+    private string ResolveModel(string? requested)
+    {
+        return string.IsNullOrWhiteSpace(requested) ? _defaultModel : requested.Trim();
     }
 
     private static void AddIfNotDup(List<Message> dst, Message? m)

@@ -1,4 +1,6 @@
 ﻿using MbaseMultiSessionQwen;
+using Microsoft.Extensions.Options;
+using System;
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -7,17 +9,16 @@ public class IPDRunner
 {
     private readonly SessionManager _mgr;
     private readonly SessionMediator _med;
+    private readonly IReadOnlyList<ModelProfile> _models;
 
     // Payoff matrix: (c,c)=R,R  (c,d)=S,T  (d,c)=T,S  (d,d)=P,P
     private const int R = 5, T = 10, P = 1, S = 0;
 
-    private static readonly string DefaultRoundPromptVersion = "v1";
-    private static readonly string DefaultAgentSystemPromptVersion = "v4";
-
-    public IPDRunner(SessionManager manager, SessionMediator mediator)
+    public IPDRunner(SessionManager manager, SessionMediator mediator, IReadOnlyList<ModelProfile> models)
     {
         _mgr = manager;
         _med = mediator;
+        _models = models;
     }
 
     // ======================================================
@@ -34,7 +35,13 @@ public class IPDRunner
         var log = new List<RoundRow>(rounds);
         int scoreA = 0, scoreB = 0;
 
-        string BuildFullPayoffTableFor(bool isA)
+        var (modelA, modelB) = SelectModels();
+        _mgr.SetModel(sessionA, modelA);
+        _mgr.SetModel(sessionB, modelB);
+        var runModelLabel = BuildRunLabel(modelA, modelB);
+
+        // ——— Add here ———
+        string BuildFullPayoffTable()
         {
             var sb = new StringBuilder(log.Count * 40 + 128);
 
@@ -81,7 +88,7 @@ public class IPDRunner
 
         // Unique run identifier for this specific game
         var uniqueName = Util.CreateUniqueName(
-            model: model + "_ethicalphrasing",
+            model: runModelLabel,
             game: "IPD",
             context: title,
             promptVersion: agentPromptVersion,
@@ -126,26 +133,18 @@ public class IPDRunner
 
             // 1) First, log the decisions for this round
             DecisionLogger.InsertDecision(
-                model,
-                "PD",
+                modelA, "PD",
                 title,
-                r,
-                ca,
-                scoreA,
-                moveA,
+                r, ca, scoreA,moveA,
                 agentPromptVersion,
                 run_id,
                 uniqueName,
                 playerRole: "A");
 
             DecisionLogger.InsertDecision(
-                model,
-                "PD",
+                modelB, "PD",
                 title,
-                r,
-                cb,
-                scoreB,
-                moveB,
+                r, cb, scoreB, moveB,
                 agentPromptVersion,
                 run_id,
                 uniqueName,
@@ -302,8 +301,9 @@ public class IPDRunner
         int run_id = 1)
     {
         var results = new Dictionary<string, GameResult>();
-        var sw = Stopwatch.StartNew();
-
+        var matchModels = SelectModels();
+        var runModelLabel = BuildRunLabel(matchModels.modelA, matchModels.modelB);
+        var __sw = Stopwatch.StartNew();
         for (int i = 1; i <= 6; i++)
         {
             var version = $"v{i}";
@@ -319,8 +319,7 @@ public class IPDRunner
             var sessionB = $"{sessionPrefix}_{version}_B";
 
             Console.WriteLine();
-            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) [run {run_id}] =====");
-            Console.WriteLine($"Session prefix: {sessionPrefix} (A={sessionA}, B={sessionB})");
+            Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) with {runModelLabel} =====");
 
             var result = await PlayCoreAsync(
                 sessionA,
@@ -351,6 +350,20 @@ public class IPDRunner
         sw.Stop();
         Console.WriteLine("Elapsed Time (ms): " + sw.ElapsedMilliseconds);
         return results;
+    }
+
+    private (string modelA, string modelB) SelectModels()
+    {
+        var modelA = _models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL");
+        var modelB = _models.Count > 1 ? _models[1].Model : modelA;
+        return (modelA, modelB);
+    }
+
+    private static string BuildRunLabel(string modelA, string modelB)
+    {
+        return string.Equals(modelA, modelB, StringComparison.OrdinalIgnoreCase)
+            ? modelA
+            : $"{modelA}_vs_{modelB}";
     }
 
     private static readonly Dictionary<string, Func<int, string?, int, int, string>> RoundPromptStrings =

@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Mbase.Brokers;      // MbaseBroker, MbaseBrokerOptions, ModelRoute, ProviderKind
 using Mbase.Abstractions;
+using System;
+using System.Collections.Generic;
 
 namespace MbaseMultiSessionQwen.Brokers;
 
@@ -11,8 +13,11 @@ public static class MbaseBrokerSetup
     /// <summary>
     /// Builds a DI container with MbaseBroker registered and returns both the ServiceProvider and IModelBroker.
     /// </summary>
-    public static (ServiceProvider Provider, IModelBroker Broker) Build(string baseUrlForCompatServer)
+    public static (ServiceProvider Provider, IModelBroker Broker) Build(IReadOnlyList<ModelProfile> models)
     {
+        if (models is null || models.Count == 0)
+            throw new ArgumentException("At least one model profile is required", nameof(models));
+
         var services = new ServiceCollection();
 
         // Logging
@@ -39,43 +44,26 @@ public static class MbaseBrokerSetup
         {
             o.TimeoutSeconds = 600;
             o.DefaultMaxTokens = 1024;
-            o.Routes = new(StringComparer.OrdinalIgnoreCase) // <= case-insensitive
+            o.Routes = new(StringComparer.OrdinalIgnoreCase);
+
+            var defaultBase = string.IsNullOrWhiteSpace(models[0].BaseUrl)
+                ? "http://localhost:8080"
+                : models[0].BaseUrl;
+
+            foreach (var model in models)
             {
-                ["Qwen2.5 7 B Instruct"] = new ModelRoute   // typo guard? remove if not needed
+                var baseUrl = string.IsNullOrWhiteSpace(model.BaseUrl) ? defaultBase : model.BaseUrl;
+                o.Routes[model.Model] = new ModelRoute
                 {
                     Provider = ProviderKind.OpenAICompat,
-                    BaseUrl = baseUrlForCompatServer,
+                    BaseUrl = baseUrl,
                     KvParamName = "slot_id"
-                },
-                ["Qwen2.5 7B Instruct"] = new ModelRoute     // <-- EXACT model id from /v1/models
-                {
-                    Provider = ProviderKind.OpenAICompat,
-                    BaseUrl = baseUrlForCompatServer,
-                    KvParamName = "slot_id"
-                },
-                ["qwen2.5-7b-instruct"] = new ModelRoute     // handy alias
-                {
-                    Provider = ProviderKind.OpenAICompat,
-                    BaseUrl = baseUrlForCompatServer,
-                    KvParamName = "slot_id"
-                },
-                ["gemma-2-9b-it"] = new ModelRoute   // typo guard? remove if not needed
-                {
-                    Provider = ProviderKind.OpenAICompat,
-                    BaseUrl = baseUrlForCompatServer,
-                    KvParamName = "slot_id"
-                },
-                ["Meta Llama 3.1 8B Instruct"] = new ModelRoute   // typo guard? remove if not needed
-                {
-                    Provider = ProviderKind.OpenAICompat,
-                    BaseUrl = baseUrlForCompatServer,
-                    KvParamName = "slot_id"
-                }
-            };
+                };
+            }
         });
 
 
-        // Broker
+// Broker
         services.AddSingleton<IModelBroker, MbaseBroker>();
 
         var sp = services.BuildServiceProvider();
