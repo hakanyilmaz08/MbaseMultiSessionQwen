@@ -94,7 +94,7 @@ public class ISDRunner
 
         // Unique run identifier for this specific game
         var uniqueName = Util.CreateUniqueName(
-            model: runModelLabel,
+            model: runModelLabel+ "_cross",
             game: "ISD",
             context: title,
             promptVersion: agentPromptVersion,
@@ -140,21 +140,30 @@ public class ISDRunner
 
             // 1) Log decisions for this round (per-agent model labels)
             DecisionLogger.InsertDecision(
-                modelA, "PD",
-                title,
-                r, ca, scoreA, moveA,
-                agentPromptVersion,
-                run_id,
-                sessionA);
+               model: modelA,
+               game: "SD",
+               context: title,
+               round: r,
+               choice: ca,
+               payoff: scoreA,
+               rawResponse: moveA,
+               promptVersion: agentPromptVersion,
+               runId: run_id,
+               unique_name: uniqueName,
+               playerRole: "A");
 
             DecisionLogger.InsertDecision(
-                modelB, "SD",
-                title,
-                r, cb, scoreB, moveB,
-                agentPromptVersion,
-                run_id,
-                sessionB);
-
+                model: modelB,
+                game: "SD",
+                context: title,
+                round: r,
+                choice: cb,
+                payoff: scoreB,
+                rawResponse: moveB,
+                promptVersion: agentPromptVersion,
+                runId: run_id,
+                unique_name: uniqueName,
+                playerRole: "B");
             lastA = moveA;
             lastB = moveB;
 
