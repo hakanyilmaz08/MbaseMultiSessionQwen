@@ -46,7 +46,7 @@ public class IPDRunner
         int scoreA = 0, scoreB = 0;
 
         // Select concrete models for A and B, and label the run
-        var (modelA, modelB) = SelectModels();
+        var (modelA, modelB) = SelectModels(selectedModelA, selectedModelB);
         _mgr.SetModel(sessionA, modelA);
         _mgr.SetModel(sessionB, modelB);
         var runModelLabel = BuildRunLabel(modelA, modelB);
@@ -313,7 +313,7 @@ public class IPDRunner
         return PlayCoreAsync(sessionA, sessionB, rounds, resetPrompts, agentPromptVersion, run_id);
     }
 
-    public async Task<Dictionary<string, GameResult>> RunV1ToV5SequentialAsync(
+    public async Task<(Dictionary<string, GameResult> Results, string RunLabel)> RunV1ToV5SequentialAsync(
         string baseSessionPrefix,
         int rounds = 50,
         bool resetPrompts = true,
@@ -324,6 +324,9 @@ public class IPDRunner
 
         var (modelA, modelB) = SelectModels();
         var runModelLabel = BuildRunLabel(modelA, modelB);
+        var effectivePrefix = string.IsNullOrWhiteSpace(baseSessionPrefix)
+            ? runModelLabel
+            : $"{baseSessionPrefix}__{runModelLabel}";
 
         var sw = Stopwatch.StartNew();
 
@@ -337,7 +340,7 @@ public class IPDRunner
                 continue;
             }
 
-            var sessionPrefix = $"{baseSessionPrefix}_run{run_id}";
+            var sessionPrefix = $"{effectivePrefix}_run{run_id}";
             var sessionA = $"{sessionPrefix}_{version}_A";
             var sessionB = $"{sessionPrefix}_{version}_B";
 
@@ -375,14 +378,14 @@ public class IPDRunner
 
         sw.Stop();
         Console.WriteLine("Elapsed Time (ms): " + sw.ElapsedMilliseconds);
-        return results;
+        return (results, runModelLabel);
     }
 
     // ======================================================
     // Model selection helpers
     // ======================================================
 
-    private (string modelA, string modelB) SelectModels()
+    private (string modelA, string modelB) SelectModels(string? preferredModelA = null, string? preferredModelB = null)
     {
         var modelA = preferredModelA ?? (_models.Count > 0 ? _models[0].Model : Util.Env("LLM_MODEL"));
 
