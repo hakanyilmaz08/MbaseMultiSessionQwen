@@ -232,7 +232,7 @@ while (true)
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
-                        var allResults = await ipd.RunV1ToV5SequentialAsync(runLabel, rounds: 50, false, true, run_id);
+                        var (allResults, actualRunLabel) = await ipd.RunV1ToV5SequentialAsync(runLabel, rounds: 50, false, true, run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -243,21 +243,21 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"ipd_{version}_ethical_{runLabel}_run{run_id}.txt";
+                            var fileName = $"ipd_{version}_ethical_{actualRunLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"ipd_ethicalv2_{runLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"ipd_ethicalv2_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns,sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
                 case "/playisd":
                     var isd = new ISDRunner(mgr, mediator, models);
-                    var runLabelisd= models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
+                    var runLabel = models.Count > 1 ? $"{models[0].Model}_vs_{models[1].Model}" : MODEL;
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
-                        var allResults = await isd.RunV1ToV5SequentialAsync(runLabelisd, rounds: 50, false, true, run_id);
+                        var (allResults, actualRunLabel) = await isd.RunV1ToV5SequentialAsync(runLabel, rounds: 50, false, true, run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -268,11 +268,11 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"isd_{version}_ethicalv2_{runLabelisd}_run{run_id}.txt";
+                            var fileName = $"isd_{version}_ethicalv2_{actualRunLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"isd_ethicalv2_{runLabelisd}_run{run_id}.txt";
+                        var fileNameforruns = $"isd_ethicalv2_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
@@ -284,7 +284,7 @@ while (true)
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
-                        var allResults = await ipd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true, run_id);
+                        var (allResults, actualRunLabel) = await ipd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true, run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -295,17 +295,17 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"ipd_{version}_ethical_{runLabel2}_run{run_id}.txt";
+                            var fileName = $"ipd_{version}_ethical_{actualRunLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"ipd_ethicalv2_{runLabel2}_run{run_id}.txt";
+                        var fileNameforruns = $"ipd_ethicalv2_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
-                    }                    
+                    }
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
-                        var allResults = await isd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true,run_id);
+                        var (allResults, actualRunLabel) = await isd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true,run_id);
                         foreach (var kvp in allResults)
                         {
                             var version = kvp.Key;      // e.g. "v1"
@@ -316,11 +316,11 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"isd_ethicalv2_{version}_{runLabel2}_ethical_run{run_id}.txt";
+                            var fileName = $"isd_ethicalv2_{version}_{actualRunLabel}_ethical_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"isd_ethicalv2_{runLabel2}_run{run_id}.txt";
+                        var fileNameforruns = $"isd_ethicalv2_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
