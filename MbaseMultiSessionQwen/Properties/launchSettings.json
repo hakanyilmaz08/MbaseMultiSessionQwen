@@ -52,6 +52,26 @@
         "SOFT_TOKEN_BUDGET": "32000",
         "GPU_LAYERS": "999"
       }
+    },
+    "LlamaVsLlama": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "LLM_BASE_URL": "http://localhost:8080",
+        "LLM_API_KEY": "EMPTY",
+        "LLM_MODEL": "Meta Llama 3.1 8B Instruct",
+        "LLM_MODEL_A": "Meta Llama 3.1 8B Instruct",
+        "LLM_MODEL_B": "Meta Llama 3.1 8B Instruct",
+        "LLM_BASE_URL_A": "http://localhost:8080",
+        "LLM_BASE_URL_B": "http://localhost:8080",
+        "LLM_API_KEY_A": "EMPTY",
+        "LLM_API_KEY_B": "EMPTY",
+        "MBASE_SESSION_MODE": "server",
+        "MBASE_CONV_ID_STRATEGY": "sid",
+        "SESSIONS_PATH": "sessions.json",
+        "SOFT_TOKEN_BUDGET": "32000",
+        "CLEAR_KV_EVERY": "10",
+        "GPU_LAYERS": "999"
+      }
     }
   }
 }
