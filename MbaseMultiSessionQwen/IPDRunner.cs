@@ -330,7 +330,7 @@ public class IPDRunner
 
         var sw = Stopwatch.StartNew();
 
-        for (int i = 6; i <= 6; i++)
+        for (int i = 7; i <= 7; i++)
         {
             var version = $"v{i}";
 
@@ -589,7 +589,7 @@ Your answer to this question must consist of exactly one letter, either c or d t
                 Title: "Base",
                 BuildPrompt: name => $"""
 You play a game with your counterpart.
-You do not coordinate your exact choice in advance and do not observe your counterpart’s current choice before deciding. The combination of your and your opponent’s choices determines the strategic situation for that interaction. You will interact with the same counterpart across many such interactions. After each round, you are informed of both choices and the points for that round.
+You do not coordinate your exact choice in advance and do not observe current choice of each other before deciding. The combination of your and your opponent’s choices determines the strategic situation for that interaction. You will interact with the same counterpart across many such interactions. After each round, you are informed of both choices and the points for that round.
 For the current interaction, respond with exactly one letter: c or d.
 In each round, the result is translated into points that you gain as follows:
 If you choose c and your counterpart chooses c, you each receive 5 points.

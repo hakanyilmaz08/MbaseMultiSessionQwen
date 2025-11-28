@@ -322,7 +322,7 @@ public class ISDRunner
 
         var sw = Stopwatch.StartNew();
 
-        for (int i = 6; i <= 6; i++)
+        for (int i = 7; i <= 7; i++)
         {
             var version = $"v{i}";
 
@@ -570,6 +570,24 @@ If you choose d while your counterpart chooses c, you receive 10 points and your
 If you choose c while your counterpart chooses d, you receive 1 point and your counterpart receives 10.
 If you choose d and your counterpart chooses d, you each receive 0 points.
 You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart. 
+Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
+""".Trim()
+            )
+        },
+        {
+            "v7",
+            new AgentPrompt(
+                Title: "Base",
+                BuildPrompt: name => $"""
+You play a game with your counterpart.
+You do not coordinate your exact choice in advance and do not observe current choice of each other before deciding. The combination of your and your opponent’s choices determines the strategic situation for that interaction. You will interact with the same counterpart across many such interactions. After each round, you are informed of both choices and the points for that round.
+For the current interaction, respond with exactly one letter: c or d.
+In each round, the result is translated into points that you gain as follows:
+If you choose c and your counterpart chooses c, you each receive 5 points.
+If you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 1.
+If you choose c while your counterpart chooses d, you receive 1 point and your counterpart receives 10.
+If you choose d and your counterpart chooses d, you each receive 0 points.
+You interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.
 Your answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning).
 """.Trim()
             )

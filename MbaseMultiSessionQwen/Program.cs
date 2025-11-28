@@ -39,6 +39,7 @@ Commands:
   /save                      Force save to disk
   /playipd                   Play iterated prisoner's dilemma
   /playisd                   Play snowdrift (iterated)
+  /playboth                  Play both games (snowdrift and prisoner's dilemma) sequentially
   /exit                      Quit
 
 Anything not starting with '/' is sent to the model in the current session.
@@ -300,11 +301,11 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"ipd_{version}_{actualRunLabel}_run{run_id}.txt";
+                            var fileName = $"ipd_base_{actualRunLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"ipd_{actualRunLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"ipd_baseduradtion_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     for (int run_id = 1; run_id <= 1; run_id++)
@@ -321,11 +322,11 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"isd_{version}_{actualRunLabel}_ethical_run{run_id}.txt";
+                            var fileName = $"isd_base_{actualRunLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"isd_{actualRunLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"isd_baseduration_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
