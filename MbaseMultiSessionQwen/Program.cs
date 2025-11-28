@@ -300,11 +300,11 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"ipd_{version}_ethical_{actualRunLabel}_run{run_id}.txt";
+                            var fileName = $"ipd_{version}_{actualRunLabel}_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"ipd_ethicalv2_{actualRunLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"ipd_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     for (int run_id = 1; run_id <= 1; run_id++)
@@ -321,11 +321,11 @@ while (true)
                             Console.WriteLine(result.Pretty());
 
                             // File per scenario (simple, predictable)
-                            var fileName = $"isd_ethicalv2_{version}_{actualRunLabel}_ethical_run{run_id}.txt";
+                            var fileName = $"isd_{version}_{actualRunLabel}_ethical_run{run_id}.txt";
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"isd_ethicalv2_{actualRunLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"isd_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;

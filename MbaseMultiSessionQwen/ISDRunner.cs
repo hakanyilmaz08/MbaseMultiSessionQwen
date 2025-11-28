@@ -94,7 +94,7 @@ public class ISDRunner
 
         // Unique run identifier for this specific game
         var uniqueName = Util.CreateUniqueName(
-            model: runModelLabel+ "_cross",
+            model: runModelLabel,
             game: "ISD",
             context: title,
             promptVersion: agentPromptVersion,
@@ -164,6 +164,64 @@ public class ISDRunner
                 runId: run_id,
                 unique_name: uniqueName,
                 playerRole: "B");
+
+            if (r % 10 == 0)
+            {
+                try
+                {
+                    var explainPromptA = BuildPreviousChoiceExplanationPrompt(
+                        scenarioTitle: title,
+                        round: r,
+                        myMove: moveA,
+                        opponentMove: moveB,
+                        myScoreBefore: scoreA_before,
+                        oppScoreBefore: scoreB_before,
+                        myScoreAfter: scoreA,
+                        oppScoreAfter: scoreB);
+
+                    var explainPromptB = BuildPreviousChoiceExplanationPrompt(
+                        scenarioTitle: title,
+                        round: r,
+                        myMove: moveB,
+                        opponentMove: moveA,
+                        myScoreBefore: scoreB_before,
+                        oppScoreBefore: scoreA_before,
+                        myScoreAfter: scoreB,
+                        oppScoreAfter: scoreA);
+
+                    var explainA = await _med.SendToSessionTimedAsync(sessionA, explainPromptA);
+                    var explainB = await _med.SendToSessionTimedAsync(sessionB, explainPromptB);
+
+                    ExplanationLogger.InsertRoundExplanation(
+                        model: modelA,
+                        game: "SD",
+                        context: title,
+                        round: r,
+                        promptVersion: agentPromptVersion,
+                        runId: run_id,
+                        uniqueName: uniqueName,
+                        explanationType: "round_10_block",
+                        explanationText: explainA.Reply.Trim(),
+                        playerRole: "A");
+
+                    ExplanationLogger.InsertRoundExplanation(
+                        model: modelB,
+                        game: "SD",
+                        context: title,
+                        round: r,
+                        promptVersion: agentPromptVersion,
+                        runId: run_id,
+                        uniqueName: uniqueName,
+                        explanationType: "round_10_block",
+                        explanationText: explainB.Reply.Trim(),
+                        playerRole: "B");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Warn] Failed to get round-{r} explanations: {ex.Message}");
+                }
+            }
+
             lastA = moveA;
             lastB = moveB;
 
@@ -264,7 +322,7 @@ public class ISDRunner
 
         var sw = Stopwatch.StartNew();
 
-        for (int i = 1; i <= 6; i++)
+        for (int i = 6; i <= 6; i++)
         {
             var version = $"v{i}";
 
