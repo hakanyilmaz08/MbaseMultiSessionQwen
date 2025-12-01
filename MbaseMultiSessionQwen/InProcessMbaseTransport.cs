@@ -1,10 +1,10 @@
 ﻿// InProcessMbaseTransport.cs
 public sealed class InProcessMbaseTransport : ISessionTransport
 {
-    private readonly MbaseEngine _engine;
+    private readonly LlamaCppEngine _engine;
     private readonly string _model;
 
-    public InProcessMbaseTransport(MbaseEngine engine, string model)
+    public InProcessMbaseTransport(LlamaCppEngine engine, string model)
     { _engine = engine; _model = model; }
 
     public async Task<(string reply, string? conversationIdFromServer)> SendAsync(

@@ -31,6 +31,7 @@ public enum ProviderKind
 {
     OpenAI,        // Official OpenAI API
     OpenAICompat,  // vLLM, llama.cpp server, TextGen, etc. exposing /v1/chat/completions
+    LlamaCpp,      // llama.cpp server (OpenAI compatible with slot_id KV cache)
     Ollama         // Ollama's /api/chat
 }
 
@@ -58,6 +59,7 @@ public sealed class MbaseBroker : IModelBroker
         {
             ProviderKind.OpenAI => await CallOpenAIAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
             ProviderKind.OpenAICompat => await CallOpenAICompatAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
+            ProviderKind.LlamaCpp => await CallLlamaCppAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
             ProviderKind.Ollama => await CallOllamaAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
             _ => throw new NotSupportedException($"Provider {route.Provider} not supported.")
         };
@@ -203,6 +205,22 @@ public sealed class MbaseBroker : IModelBroker
             var s = e.GetRawText();
             return s.Length <= maxLen ? s : s.Substring(0, maxLen) + " …";
         }
+    }
+
+    private Task<(string content, (int promptToks, int complToks) usage, string? nextKv)> CallLlamaCppAsync(
+        ModelRoute route, string model, string? system, IReadOnlyList<ChatMessage> msgs,
+        double temperature, double topP, string? kvHandle, CancellationToken ct)
+    {
+        var kvParam = string.IsNullOrWhiteSpace(route.KvParamName) ? "slot_id" : route.KvParamName!;
+        var effectiveRoute = new ModelRoute
+        {
+            Provider = route.Provider,
+            BaseUrl = route.BaseUrl,
+            ApiKey = route.ApiKey,
+            KvParamName = kvParam
+        };
+
+        return CallOpenAICompatAsync(effectiveRoute, model, system, msgs, temperature, topP, kvHandle, ct);
     }
 
     private async Task<(string, (int, int), string?)> CallOpenAIAsync(

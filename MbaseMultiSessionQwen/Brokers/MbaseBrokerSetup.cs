@@ -1,8 +1,9 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Mbase.Brokers;      // MbaseBroker, MbaseBrokerOptions, ModelRoute, ProviderKind
 using Mbase.Abstractions;
+using MbaseMultiSessionQwen;
 using System;
 using System.Collections.Generic;
 
@@ -21,7 +22,7 @@ public static class MbaseBrokerSetup
         var services = new ServiceCollection();
 
         // Logging
-       
+
         services.AddLogging(b =>
         {
             b.ClearProviders();
@@ -53,21 +54,39 @@ public static class MbaseBrokerSetup
             foreach (var model in models)
             {
                 var baseUrl = string.IsNullOrWhiteSpace(model.BaseUrl) ? defaultBase : model.BaseUrl;
+                var provider = ResolveProvider(model.Key);
                 o.Routes[model.Model] = new ModelRoute
                 {
-                    Provider = ProviderKind.OpenAICompat,
+                    Provider = provider,
                     BaseUrl = baseUrl,
-                    KvParamName = "slot_id"
+                    ApiKey = model.ApiKey,
+                    KvParamName = provider == ProviderKind.LlamaCpp ? "slot_id" : null
                 };
             }
         });
 
 
-// Broker
+        // Broker
         services.AddSingleton<IModelBroker, MbaseBroker>();
 
         var sp = services.BuildServiceProvider();
         var broker = sp.GetRequiredService<IModelBroker>();
         return (sp, broker);
+
+        static ProviderKind ResolveProvider(string key)
+        {
+            var suffix = string.IsNullOrWhiteSpace(key) ? string.Empty : $"_{key.ToUpperInvariant()}";
+            var envValue = Util.DetectEnv($"LLM_PROVIDER{suffix}", Util.DetectEnv("LLM_PROVIDER", "openai-compat"));
+
+            return envValue.Trim().ToLowerInvariant() switch
+            {
+                "openai" => ProviderKind.OpenAI,
+                "ollama" => ProviderKind.Ollama,
+                "llama" => ProviderKind.LlamaCpp,
+                "llama.cpp" => ProviderKind.LlamaCpp,
+                "llamacpp" => ProviderKind.LlamaCpp,
+                _ => ProviderKind.OpenAICompat
+            };
+        }
     }
 }
