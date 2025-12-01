@@ -136,11 +136,20 @@ while (true)
             switch (cmd)
             {
                 case "/switch":
-                    if (parts.Length < 2) { Console.WriteLine("usage: /switch <sid>"); break; }
-                    active = parts[1];
-                    SyncSessionWithEngine(active);          // NEW: sync with engine
+                    var sid = line.Length > cmd.Length
+                    ? line.Substring(cmd.Length).Trim()
+                    : string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(sid))
+                    {
+                        Console.WriteLine("usage: /switch <sid>");
+                        break;
+                    }
+
+                    active = sid;
+                    SyncSessionWithEngine(active);
                     Console.WriteLine($"Switched to session: {active}");
-                    break;
+                    break;                   
 
                 case "/new":
                     if (parts.Length < 2) { Console.WriteLine("usage: /new <sid>"); break; }
@@ -287,7 +296,7 @@ while (true)
                     var isd2 = new ISDRunner(mgr, mediator, models);
                     var runLabel2 = string.Empty;
 
-                    for (int run_id = 1; run_id <= 1; run_id++)
+                    for (int run_id = 1; run_id <= 10; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
                         var (allResults, actualRunLabel) = await ipd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true, run_id);
@@ -305,10 +314,10 @@ while (true)
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"ipd_baseduradtion_{actualRunLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"ipd__{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
-                    for (int run_id = 1; run_id <= 1; run_id++)
+                    for (int run_id = 1; run_id <= 10; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
                         var (allResults, actualRunLabel) = await isd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true,run_id);
@@ -326,7 +335,7 @@ while (true)
                             File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"isd_baseduration_{actualRunLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"isd__{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;

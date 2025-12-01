@@ -322,7 +322,7 @@ public class ISDRunner
 
         var sw = Stopwatch.StartNew();
 
-        for (int i = 7; i <= 7; i++)
+        for (int i = 1; i <= 7; i++)
         {
             var version = $"v{i}";
 
@@ -671,7 +671,7 @@ Before this round, the cumulative scores were:
 - other side: {oppScoreBefore}
 
 After this round, the cumulative scores are:
-- you: {myScoreAfter}
+- you: {myScoreAfter}f
 - other side: {oppScoreAfter}
 
 In 3–6 sentences, describe what led you to that choice in this round:
@@ -798,7 +798,7 @@ Answer in natural language only. Do not respond with just 'c' or 'd'.
         public string Pretty()
         {
             var sb = new StringBuilder();
-            sb.AppendLine($"IPD {Rounds} rounds — {SessionA} vs {SessionB}");
+            sb.AppendLine($"ISD {Rounds} rounds — {SessionA} vs {SessionB} ");
             sb.AppendLine($"Final: {FinalScoreA} - {FinalScoreB}");
             sb.AppendLine("Round | A  B | +A +B | ΣA  ΣB");
             sb.AppendLine("------+------|--------|---------");

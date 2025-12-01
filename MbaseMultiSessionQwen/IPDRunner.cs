@@ -330,7 +330,7 @@ public class IPDRunner
 
         var sw = Stopwatch.StartNew();
 
-        for (int i = 7; i <= 7; i++)
+        for (int i = 1; i <= 7; i++)
         {
             var version = $"v{i}";
 
@@ -671,6 +671,10 @@ Your answer to this question must consist of exactly one letter, either c or d t
             (opponentMove == "c" || opponentMove == "C") ? "cooperate ('c')" :
             (opponentMove == "d" || opponentMove == "D") ? "defect ('d')" :
             $"'{opponentMove}'";
+//        return $"""
+//which countries did I ask about?
+//""".Trim();
+
         return $"""
 You have just completed round {round}.
 In that round, you chose {myLabel}, and the other side chose {oppLabel}.

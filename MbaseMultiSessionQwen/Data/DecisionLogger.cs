@@ -27,10 +27,10 @@ public static class DecisionLogger
         const string sql = @"
         INSERT OR IGNORE INTO decisions
             (run_id, model, game, context, round, choice, payoff,
-             raw_response, prompt_version,  player_role, unique_name)
+             raw_response, prompt_version,  player_role, unique_name, timestamp)
         VALUES
             ($run_id, $model, $game, $context, $round, $choice, $payoff,
-             $raw_response, $prompt_version, $player_role,$unique_name);
+             $raw_response, $prompt_version, $player_role,$unique_name,$timestamp);
         ";
 
         using var cmd = connection.CreateCommand();
@@ -49,7 +49,7 @@ public static class DecisionLogger
         cmd.Parameters.AddWithValue("$player_role", (object?)playerRole ?? DBNull.Value);
         //cmd.Parameters.AddWithValue("$pair_id", (object?)pairId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$unique_name", unique_name);
-
+        cmd.Parameters.AddWithValue("$timestamp", DateTime.Now.ToString());
         cmd.ExecuteNonQuery();
     }
 }
