@@ -8,7 +8,7 @@ using System.Text.Json;
 public class SessionManager
 {
     private readonly SessionRepo _repo;
-    private readonly MbaseEngine _engine;
+    private readonly LlamaCppEngine _engine;
     private readonly string _storePath;
     private readonly JsonSerializerOptions _opts;
     private readonly int _softBudget;
@@ -24,7 +24,7 @@ public class SessionManager
     private readonly ConcurrentDictionary<string, Func<string>> _payoffProviders = new();
 
     
-    public SessionManager(SessionRepo repo, MbaseEngine engine, string storePath, JsonSerializerOptions opts, int softBudget, string mode, string defaultModel, IEnumerable<ModelProfile>? knownModels = null)
+    public SessionManager(SessionRepo repo, LlamaCppEngine engine, string storePath, JsonSerializerOptions opts, int softBudget, string mode, string defaultModel, IEnumerable<ModelProfile>? knownModels = null)
     {
         _repo = repo; _engine = engine; _storePath = storePath; _opts = opts; _softBudget = softBudget; _mode = mode;
         _defaultModel = defaultModel;

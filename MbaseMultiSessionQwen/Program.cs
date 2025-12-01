@@ -77,10 +77,10 @@ if (!string.IsNullOrWhiteSpace(API_KEY))
 var store = new InMemorySessionStore();
 
 var bootstrap = MbaseBrokerSetup.Build(models);
-using var sp = bootstrap.Provider;             
+using var sp = bootstrap.Provider;
 var broker = bootstrap.Broker;
 // broker=EchoBroker() or EchoBroker for test
-var engine = new MbaseEngine(store, broker);
+var engine = new LlamaCppEngine(store, broker);
 
 
 

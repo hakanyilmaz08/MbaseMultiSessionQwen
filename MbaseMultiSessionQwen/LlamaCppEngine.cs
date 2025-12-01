@@ -1,16 +1,16 @@
-﻿// MbaseEngine.cs
+// LlamaCppEngine.cs
 using Mbase.Abstractions;
 using Mbase.Domain;
 using Mbase.Services;
 using System.Collections.Concurrent;
 
-public sealed class MbaseEngine
+public sealed class LlamaCppEngine
 {
     private readonly ISessionStore _store;
     private readonly IModelBroker _broker;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
 
-    public MbaseEngine(ISessionStore store, IModelBroker broker)
+    public LlamaCppEngine(ISessionStore store, IModelBroker broker)
     { _store = store; _broker = broker; }
 
     public SessionState CreateOrGet(string sessionId, string model, string? systemPrompt = null,
