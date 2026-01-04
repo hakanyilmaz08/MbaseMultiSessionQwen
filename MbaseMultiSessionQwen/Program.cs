@@ -207,7 +207,7 @@ while (true)
                     if (parts.Length < 2) { Console.WriteLine("usage: /sys <system prompt>"); break; }
                     var sysText = line.Substring(cmd.Length).Trim();      // keep spaces intact
                     engine.Update(active!, systemPrompt: sysText);        // update on engine
-                                                                          // mirror locally: replace/add first system message
+                                                                          
                     var list2 = repo.Sessions[active!];
                     var idx = list2.FindIndex(m => m.Role == "system");
                     if (idx >= 0) list2[idx] = list2[idx] with { Content = sysText };
@@ -296,7 +296,7 @@ while (true)
                     var isd2 = new ISDRunner(mgr, mediator, models);
                     var runLabel2 = string.Empty;
 
-                    for (int run_id = 1; run_id <= 10; run_id++)
+                    for (int run_id = 2; run_id <= 10; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
                         var (allResults, actualRunLabel) = await ipd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true, run_id);
@@ -309,15 +309,21 @@ while (true)
                             Console.WriteLine($"=== {version} ===");
                             Console.WriteLine(result.Pretty());
 
-                            // File per scenario (simple, predictable)
-                            var fileName = $"ipd_base_{actualRunLabel}_run{run_id}.txt";
-                            File.WriteAllText(fileName, result.Pretty());
+                                // File per scenario (simple, predictable)
+                                var fileName =
+    $"ipd_{(models.Select(m => m.Model).Distinct().Skip(1).Any()
+        ? "cross"
+        : (string.IsNullOrWhiteSpace(models.FirstOrDefault()?.Model)
+            ? "noname"
+            : models.First().Model))}_{version}_run{run_id}.txt";
+
+                                File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"ipd__{actualRunLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"ipd_duration_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
-                    for (int run_id = 1; run_id <= 10; run_id++)
+                    for (int run_id = 2; run_id <= 10; run_id++)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
                         var (allResults, actualRunLabel) = await isd2.RunV1ToV5SequentialAsync(runLabel2, rounds: 50, false, true,run_id);
@@ -330,12 +336,18 @@ while (true)
                             Console.WriteLine($"=== {version} ===");
                             Console.WriteLine(result.Pretty());
 
-                            // File per scenario (simple, predictable)
-                            var fileName = $"isd_base_{actualRunLabel}_run{run_id}.txt";
-                            File.WriteAllText(fileName, result.Pretty());
+                                // File per scenario (simple, predictable)
+                                var fileName =
+    $"isd_{(models.Select(m => m.Model).Distinct().Skip(1).Any()
+        ? "cross"
+        : (string.IsNullOrWhiteSpace(models.FirstOrDefault()?.Model)
+            ? "noname"
+            : models.First().Model))}_{version}_run{run_id}.txt";
+
+                                File.WriteAllText(fileName, result.Pretty());
                         }
                         sw.Stop();
-                        var fileNameforruns = $"isd__{actualRunLabel}_run{run_id}.txt";
+                        var fileNameforruns = $"isd_duration_{actualRunLabel}_run{run_id}.txt";
                         File.WriteAllText(fileNameforruns, sw.Elapsed.TotalSeconds.ToString());
                     }
                     break;
@@ -349,7 +361,12 @@ while (true)
                     engine.Reset(active!, keepSystemPrompt: false);
                     Console.WriteLine("history + system prompt cleared.");
                     break;
-
+                case "/generate":
+                    var connectionString = "Data Source=ipd_results.db";
+                    // Write files into the folder where the app is running
+                    var outputFolder = AppContext.BaseDirectory;
+                    DecisionExporter.ExportPrettyFromDecisions(connectionString, outputFolder);
+                    break;
 
                 case "/exit":
                     Console.WriteLine("bye.");
@@ -389,7 +406,7 @@ while (true)
 public record Message([property: JsonPropertyName("role")] string Role,
                [property: JsonPropertyName("content")] string Content);
 
-public record SessionMeta(string Sid, double Temperature = 0.8, double TopP = 0.9, string Model = "");
+public record SessionMeta(string Sid, double Temperature = 0.7, double TopP = 0.95, string Model = "");
 
 
 
