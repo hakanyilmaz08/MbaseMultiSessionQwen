@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": ".NET Launch (QwenOnly)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}${pathSeparator}MbaseMultiSessionQwen${pathSeparator}bin${pathSeparator}Debug${pathSeparator}net8.0${pathSeparator}MbaseMultiSessionQwen.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}${pathSeparator}MbaseMultiSessionQwen",
+      "stopAtEntry": false,
+      "console": "integratedTerminal",
+      "env": {
+        "LLM_BASE_URL": "http://localhost:8080",
+        "LLM_API_KEY": "EMPTY",
+        "LLM_MODEL": "Qwen2.5 7B Instruct",
+        "MBASE_SESSION_MODE": "server",
+        "MBASE_CONV_ID_STRATEGY": "sid",
+        "SESSIONS_PATH": "${workspaceFolder}${pathSeparator}sessions.json",
+        "SOFT_TOKEN_BUDGET": "32000",
+        "CLEAR_KV_EVERY": "10",
+        "GPU_LAYERS": "999"
+      }
+    }
+  ]
+}
