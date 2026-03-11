@@ -1,4 +1,4 @@
-{
+﻿{
   "version": "0.2.0",
   "configurations": [
     {
@@ -6,9 +6,9 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}${pathSeparator}MbaseMultiSessionQwen${pathSeparator}bin${pathSeparator}Debug${pathSeparator}net8.0${pathSeparator}MbaseMultiSessionQwen.dll",
+      "program": "${workspaceFolder}${pathSeparator}SocialDilemmaLLMSimulation${pathSeparator}bin${pathSeparator}Debug${pathSeparator}net8.0${pathSeparator}SocialDilemmaLLMSimulation.dll",
       "args": [],
-      "cwd": "${workspaceFolder}${pathSeparator}MbaseMultiSessionQwen",
+      "cwd": "${workspaceFolder}${pathSeparator}SocialDilemmaLLMSimulation",
       "stopAtEntry": false,
       "console": "integratedTerminal",
       "env": {
@@ -25,3 +25,5 @@
     }
   ]
 }
+
+

@@ -1,4 +1,4 @@
-{
+﻿{
   "version": "2.0.0",
   "tasks": [
     {
@@ -7,7 +7,7 @@
       "type": "process",
       "args": [
         "build",
-        "${workspaceFolder}${pathSeparator}MbaseMultiSessionQwen${pathSeparator}MbaseMultiSessionQwen.csproj",
+        "${workspaceFolder}${pathSeparator}SocialDilemmaLLMSimulation${pathSeparator}SocialDilemmaLLMSimulation.csproj",
         "/property:GenerateFullPaths=true",
         "/consoleloggerparameters:NoSummary"
       ],
@@ -15,3 +15,5 @@
     }
   ]
 }
+
+

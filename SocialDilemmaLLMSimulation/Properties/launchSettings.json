@@ -1,0 +1,19 @@
+{
+    "profiles":  {
+                     "DefaultLocal":  {
+                                          "commandName":  "Project",
+                                          "environmentVariables":  {
+                                                                       "LLM_BASE_URL":  "http://localhost:8080",
+                                                                       "LLM_API_KEY":  "EMPTY",
+                                                                       "LLM_MODEL":  "Qwen2.5 7B Instruct",
+                                                                       "LLM_PROVIDER":  "openai-compat",
+                                                                       "MBASE_SESSION_MODE":  "server",
+                                                                       "SESSIONS_PATH":  "sessions.json",
+                                                                       "SOFT_TOKEN_BUDGET":  "32000",
+                                                                       "CLEAR_KV_EVERY":  "10",
+                                                                       "LLM_TEMPERATURE":  "0.7",
+                                                                       "LLM_TOP_P":  "0.95"
+                                                                   }
+                                      }
+                 }
+}

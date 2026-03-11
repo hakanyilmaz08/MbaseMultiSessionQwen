@@ -1,4 +1,4 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 ## Scope
 
@@ -7,11 +7,11 @@ If a deeper `AGENTS.md` exists in a subdirectory, that file overrides this one f
 
 ## Repository Shape
 
-- Solution file: `MbaseMultiSessionQwen.sln`
-- Main project: `MbaseMultiSessionQwen/MbaseMultiSessionQwen.csproj`
-- Entrypoint: `MbaseMultiSessionQwen/Program.cs`
-- Runtime configuration: `MbaseMultiSessionQwen/Properties/launchSettings.json`
-- Session and experiment data may exist in checked-in files such as `sessions.json`, `ipd_results.db`, and `MbaseMultiSessionQwen/ipd_results.db`
+- Solution file: `SocialDilemmaLLMSimulation.sln`
+- Main project: `SocialDilemmaLLMSimulation/SocialDilemmaLLMSimulation.csproj`
+- Entrypoint: `SocialDilemmaLLMSimulation/Program.cs`
+- Runtime configuration: `SocialDilemmaLLMSimulation/Properties/launchSettings.json`
+- Session and experiment data may exist in checked-in files such as `sessions.json`, `ipd_results.db`, and `SocialDilemmaLLMSimulation/ipd_results.db`
 
 This repository is a .NET 8 research and experimentation project for running multi-session LLM interactions and game-style experiment flows such as IPD and ISD.
 
@@ -54,8 +54,8 @@ This repository is a .NET 8 research and experimentation project for running mul
 ## Verification
 
 - For code changes, run the narrowest meaningful verification first.
-- Preferred verification starts with `dotnet build MbaseMultiSessionQwen.sln`.
-- If you change runtime behavior, run a targeted `dotnet run --project MbaseMultiSessionQwen` flow only when the required local model endpoints/configuration are available.
+- Preferred verification starts with `dotnet build SocialDilemmaLLMSimulation.sln`.
+- If you change runtime behavior, run a targeted `dotnet run --project SocialDilemmaLLMSimulation/SocialDilemmaLLMSimulation.csproj` flow only when the required local model endpoints/configuration are available.
 - If you cannot run a realistic verification path because local model servers or environment settings are unavailable, say so clearly.
 
 ## When To Analyze First
@@ -73,3 +73,5 @@ Analyze before implementing when the task involves:
 - Be concise and specific about what changed.
 - Mention any reproducibility-sensitive behavior changes.
 - Mention verification performed, and any verification you could not run.
+
+
