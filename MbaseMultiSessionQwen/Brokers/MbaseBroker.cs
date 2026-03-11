@@ -25,11 +25,13 @@ public sealed class ModelRoute
     public required string BaseUrl { get; set; }      // e.g., http://localhost:8080
     public string? ApiKey { get; set; }               // if the backend needs it
     public string? KvParamName { get; set; }          // e.g., "slot_id" for llama.cpp
+    public Dictionary<string, string> Headers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public enum ProviderKind
 {
     OpenAI,        // Official OpenAI API
+    OpenRouter,    // OpenRouter's OpenAI-compatible API
     OpenAICompat,  // vLLM, llama.cpp server, TextGen, etc. exposing /v1/chat/completions
     LlamaCpp,      // llama.cpp server (OpenAI compatible with slot_id KV cache)
     Ollama         // Ollama's /api/chat
@@ -58,6 +60,7 @@ public sealed class MbaseBroker : IModelBroker
         return route.Provider switch
         {
             ProviderKind.OpenAI => await CallOpenAIAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
+            ProviderKind.OpenRouter => await CallOpenRouterAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
             ProviderKind.OpenAICompat => await CallOpenAICompatAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
             ProviderKind.LlamaCpp => await CallLlamaCppAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
             ProviderKind.Ollama => await CallOllamaAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
@@ -70,8 +73,18 @@ public sealed class MbaseBroker : IModelBroker
     private async Task<(string content, (int promptToks, int complToks) usage, string? nextKv)> CallOpenAICompatAsync(
       ModelRoute route, string model, string? system, IReadOnlyList<ChatMessage> msgs,
       double temperature, double topP, string? kvHandle, CancellationToken ct)
+        => await CallOpenAIStyleAsync("OpenAICompat", route, model, system, msgs, temperature, topP, kvHandle, bearerAuth: false, ct);
+
+    private async Task<(string content, (int promptToks, int complToks) usage, string? nextKv)> CallOpenRouterAsync(
+      ModelRoute route, string model, string? system, IReadOnlyList<ChatMessage> msgs,
+      double temperature, double topP, string? kvHandle, CancellationToken ct)
+        => await CallOpenAIStyleAsync("OpenRouter", route, model, system, msgs, temperature, topP, kvHandle, bearerAuth: true, ct);
+
+    private async Task<(string content, (int promptToks, int complToks) usage, string? nextKv)> CallOpenAIStyleAsync(
+      string clientName, ModelRoute route, string model, string? system, IReadOnlyList<ChatMessage> msgs,
+      double temperature, double topP, string? kvHandle, bool bearerAuth, CancellationToken ct)
     {
-        var client = CreateClient("OpenAICompat", route);
+        var client = CreateClient(clientName, route, bearerAuth: bearerAuth);
         var url = route.BaseUrl.TrimEnd('/') + "/v1/chat/completions";
 
         var chatMsgs = new List<object>();
@@ -220,46 +233,13 @@ public sealed class MbaseBroker : IModelBroker
             KvParamName = kvParam
         };
 
-        return CallOpenAICompatAsync(effectiveRoute, model, system, msgs, temperature, topP, kvHandle, ct);
+        return CallOpenAIStyleAsync("OpenAICompat", effectiveRoute, model, system, msgs, temperature, topP, kvHandle, bearerAuth: false, ct);
     }
 
     private async Task<(string, (int, int), string?)> CallOpenAIAsync(
         ModelRoute route, string model, string? system, IReadOnlyList<ChatMessage> msgs,
         double temperature, double topP, string? kvHandle, CancellationToken ct)
-    {
-       
-        
-        var client = CreateClient("OpenAI", route, bearerAuth: true);
-        var url = route.BaseUrl.TrimEnd('/') + "/v1/chat/completions";
-
-        var chatMsgs = new List<object>();
-        if (!string.IsNullOrWhiteSpace(system)) chatMsgs.Add(new { role = "system", content = system });
-        chatMsgs.AddRange(msgs.Select(m => new { role = m.Role, content = m.Content }));
-
-        var payload = new
-        {
-            model,
-            messages = chatMsgs,
-            temperature,
-            top_p = topP,
-            stream = false,
-            max_tokens = _opt.DefaultMaxTokens
-        };
-
-        var respJson = await PostJsonAsync(client, url, payload, ct);
-        using var doc = JsonDocument.Parse(respJson);
-
-        var root = doc.RootElement;
-        var content = root.GetProperty("choices")[0]
-                          .GetProperty("message")
-                          .GetProperty("content")
-                          .GetString() ?? string.Empty;
-
-        int promptToks = TryGetInt(root, "usage", "prompt_tokens");
-        int complToks = TryGetInt(root, "usage", "completion_tokens");
-
-        return (content, (promptToks, complToks), kvHandle);
-    }
+        => await CallOpenAIStyleAsync("OpenAI", route, model, system, msgs, temperature, topP, kvHandle, bearerAuth: true, ct);
 
     private async Task<(string, (int, int), string?)> CallOllamaAsync(
         ModelRoute route, string model, string? system, IReadOnlyList<ChatMessage> msgs,
@@ -298,6 +278,13 @@ public sealed class MbaseBroker : IModelBroker
         {
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", route.ApiKey);
         }
+
+        foreach (var header in route.Headers)
+        {
+            client.DefaultRequestHeaders.Remove(header.Key);
+            client.DefaultRequestHeaders.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
         return client;
     }
 

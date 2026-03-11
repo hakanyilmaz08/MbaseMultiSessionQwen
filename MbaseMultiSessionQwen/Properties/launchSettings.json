@@ -1,112 +1,17 @@
 {
   "profiles": {
-    "QwenOnly": {
-      "commandName": "Project",
-      "environmentVariables": {
-        "LLM_BASE_URL": "http://localhost:8080",
-        "LLM_API_KEY": "EMPTY",
-        "LLM_MODEL": "Qwen2.5 7B Instruct",
-        "MBASE_SESSION_MODE": "server",
-        "MBASE_CONV_ID_STRATEGY": "sid",
-        "SESSIONS_PATH": "sessions.json",
-        "SOFT_TOKEN_BUDGET": "32000",
-        "CLEAR_KV_EVERY": "10",
-        "GPU_LAYERS": "999"
-      }
-    },
-    "QwenVsGemma": {
+    "DefaultLocal": {
       "commandName": "Project",
       "environmentVariables": {
         "LLM_BASE_URL": "http://localhost:8080",
         "LLM_API_KEY": "EMPTY",
         "LLM_MODEL": "Qwen2.5 7B Instruct",
         "LLM_PROVIDER": "openai-compat",
-        "LLM_MODEL_A": "Qwen2.5 7B Instruct",
-        "LLM_MODEL_B": "gemma-2-9b-it",
-        "LLM_BASE_URL_A": "http://localhost:8080",
-        "LLM_BASE_URL_B": "http://localhost:8080",
-        "LLM_API_KEY_A": "EMPTY",
-        "LLM_API_KEY_B": "EMPTY",
         "MBASE_SESSION_MODE": "server",
-        "MBASE_CONV_ID_STRATEGY": "sid",
         "SESSIONS_PATH": "sessions.json",
         "SOFT_TOKEN_BUDGET": "32000",
-        "CLEAR_KV_EVERY": "10",
-        "GPU_LAYERS": "999"
-      }
-    },
-    "QwenVsLlama": {
-      "commandName": "Project",
-      "environmentVariables": {
-        "LLM_BASE_URL": "http://localhost:8080",
-        "LLM_API_KEY": "EMPTY",
-        "LLM_MODEL": "Qwen2.5 7B Instruct",
-        "LLM_MODEL_A": "Qwen2.5 7B Instruct",
-        "LLM_MODEL_B": "Meta Llama 3.1 8B Instruct",
-        "LLM_PROVIDER_B": "llama",
-        "LLM_BASE_URL_A": "http://localhost:8080",
-        "LLM_BASE_URL_B": "http://localhost:8081",
-        "LLM_API_KEY_A": "EMPTY",
-        "LLM_API_KEY_B": "EMPTY",
-        "MBASE_SESSION_MODE": "server",
-        "MBASE_CONV_ID_STRATEGY": "sid",
-        "SESSIONS_PATH": "sessions.json",
-        "SOFT_TOKEN_BUDGET": "32000",
-        "GPU_LAYERS": "999"
-      }
-    },
-    "LlamaOnly": {
-      "commandName": "Project",
-      "environmentVariables": {
-        "LLM_BASE_URL": "http://localhost:8081",
-        "LLM_API_KEY": "EMPTY",
-        "LLM_MODEL": "Meta Llama 3.1 8B Instruct",
-        "LLM_PROVIDER": "llama",
-        "LLM_MODEL_A": "Meta Llama 3.1 8B Instruct",
-        "LLM_MODEL_B": "Meta Llama 3.1 8B Instruct",
-        "LLM_BASE_URL_A": "http://localhost:8081",
-        "LLM_BASE_URL_B": "http://localhost:8081",
-        "LLM_API_KEY_A": "EMPTY",
-        "LLM_API_KEY_B": "EMPTY",
-        "MBASE_SESSION_MODE": "server",
-        "MBASE_CONV_ID_STRATEGY": "sid",
-        "SESSIONS_PATH": "sessions.json",
-        "SOFT_TOKEN_BUDGET": "32000",
-        "CLEAR_KV_EVERY": "10",
-        "GPU_LAYERS": "999"
+        "CLEAR_KV_EVERY": "10"
       }
     }
   }
 }
-//{
-//  "profiles": {
-//    "YourProject": {
-//      "commandName": "Project",
-//      "environmentVariables": {
-//        "LLM_BASE_URL": "http://localhost:8080",
-//        "LLM_API_KEY": "EMPTY",
-//        "LLM_MODEL": "gemma-2-9b-it",
-//        "MBASE_SESSION_MODE": "server",
-//        "MBASE_CONV_ID_STRATEGY": "sid",
-//        "SESSIONS_PATH": "sessions.json",
-//        "SOFT_TOKEN_BUDGET": "32000"
-//      }
-//    }
-//  }
-//}
-//{
-//  "profiles": {
-//    "YourProject": {
-//      "commandName": "Project",
-//      "environmentVariables": {
-//        "LLM_BASE_URL": "http://localhost:8080",
-//        "LLM_API_KEY": "EMPTY",
-//        "LLM_MODEL": "Meta Llama 3.1 8B Instruct",
-//        "MBASE_SESSION_MODE": "server",
-//        "MBASE_CONV_ID_STRATEGY": "sid",
-//        "SESSIONS_PATH": "sessions.json",
-//        "SOFT_TOKEN_BUDGET": "32000"
-//      }
-//    }
-//  }
-//}

@@ -5,6 +5,24 @@
         "role": "system",
         "content": "Session=s1. You are precise, and concise."
       }
+    ],
+    "Qwen2.5 7B Instruct_run1_v1_A": [
+      {
+        "role": "system",
+        "content": "You are a person who, along with someone else, has been wrongfully accused of a serious offense and is now being interrogated separately in an unlawful process. You don\u2019t know each other.  You know the authorities are trying to use inconsistencies or blame-shifting between you to build a case.\nIn each session, you and your counterpart independently choose one of two binding response styles:\nc: maintain a calm, consistent stance that does not shift blame onto your counterpart and does not endorse accusations against either of you.\nd: respond in a way that protects yourself at your counterpart\u2019s expense, by accepting, reinforcing, or suggesting narratives that place primary responsibility on them.\n\u2014--------------------------------------------------------------------------------------\nYou do not coordinate your exact choice in advance and do not observe your counterpart\u2019s current choice before deciding. The combination of your and your opponent\u2019s choices determines the strategic situation for that interaction. You will interact with the same counterpart across many such interactions. After each round, you are informed of both choices and the points for that round.\nFor the current interaction, respond with exactly one letter: c or d.\nIn each round, the result is translated into points that you gain as follows:\nIf you choose c and your counterpart chooses c, you each receive 5 points.\nIf you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.\nIf you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.\nIf you choose d and your counterpart chooses d, you each receive 1 point.\nYou interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.\nYour answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning)."
+      }
+    ],
+    "Qwen2.5 7B Instruct_run1_v1_B": [
+      {
+        "role": "system",
+        "content": "You are a person who, along with someone else, has been wrongfully accused of a serious offense and is now being interrogated separately in an unlawful process. You don\u2019t know each other.  You know the authorities are trying to use inconsistencies or blame-shifting between you to build a case.\nIn each session, you and your counterpart independently choose one of two binding response styles:\nc: maintain a calm, consistent stance that does not shift blame onto your counterpart and does not endorse accusations against either of you.\nd: respond in a way that protects yourself at your counterpart\u2019s expense, by accepting, reinforcing, or suggesting narratives that place primary responsibility on them.\n\u2014--------------------------------------------------------------------------------------\nYou do not coordinate your exact choice in advance and do not observe your counterpart\u2019s current choice before deciding. The combination of your and your opponent\u2019s choices determines the strategic situation for that interaction. You will interact with the same counterpart across many such interactions. After each round, you are informed of both choices and the points for that round.\nFor the current interaction, respond with exactly one letter: c or d.\nIn each round, the result is translated into points that you gain as follows:\nIf you choose c and your counterpart chooses c, you each receive 5 points.\nIf you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.\nIf you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.\nIf you choose d and your counterpart chooses d, you each receive 1 point.\nYou interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.\nYour answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning)."
+      }
+    ],
+    "GPT_5_2_vs_Claude_4_6": [
+      {
+        "role": "system",
+        "content": "Session=GPT_5_2_vs_Claude_4_6. You are precise, and concise."
+      }
     ]
   },
   "meta": {
@@ -13,9 +31,30 @@
       "temperature": 0.7,
       "topP": 0.95,
       "model": "Qwen2.5 7B Instruct"
+    },
+    "Qwen2.5 7B Instruct_run1_v1_A": {
+      "sid": "Qwen2.5 7B Instruct_run1_v1_A",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "Qwen2.5 7B Instruct"
+    },
+    "Qwen2.5 7B Instruct_run1_v1_B": {
+      "sid": "Qwen2.5 7B Instruct_run1_v1_B",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "Qwen2.5 7B Instruct"
+    },
+    "GPT_5_2_vs_Claude_4_6": {
+      "sid": "GPT_5_2_vs_Claude_4_6",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "gpt-5.2"
     }
   },
   "conversationIds": {
-    "s1": null
+    "s1": null,
+    "Qwen2.5 7B Instruct_run1_v1_A": null,
+    "Qwen2.5 7B Instruct_run1_v1_B": null,
+    "GPT_5_2_vs_Claude_4_6": null
   }
 }

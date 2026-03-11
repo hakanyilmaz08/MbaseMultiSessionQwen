@@ -4,21 +4,11 @@ using Mbase.Infrastructure;
 using MbaseMultiSessionQwen;
 using MbaseMultiSessionQwen.Brokers;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-
-
-var models = ModelSettings.Load();
-if (models.Count == 0)
-    throw new InvalidOperationException("No models configured. Please set LLM_MODEL (and optional LLM_MODEL_A/LLM_MODEL_B) in your launch settings.");
-
-var primaryModel = models[0];
-var BASE_URL = string.IsNullOrWhiteSpace(primaryModel.BaseUrl) ? "http://localhost:8080" : primaryModel.BaseUrl;
-var API_KEY = primaryModel.ApiKey;
-var MODEL = primaryModel.Model;
 
 var STORE = Util.Env("SESSIONS_PATH");
 var SOFT_BUDGET = int.TryParse(Util.Env("SOFT_TOKEN_BUDGET"), out var b) ? b : 3200;
@@ -36,6 +26,7 @@ Commands:
   /temp <value>              Set temperature for current session (e.g., /temp 0.3)
   /topp <value>              Set top_p for current session (e.g., /topp 0.9)
   /where                     Show current session + settings (+ conversation_id if any)
+  /cfgmodels                 Switch model/provider configuration
   /save                      Force save to disk
   /playipd                   Play iterated prisoner's dilemma
   /playisd                   Play snowdrift (iterated)
@@ -54,8 +45,6 @@ if (File.Exists(p))
 
 
 Console.OutputEncoding = Encoding.UTF8;
-Console.WriteLine($"Connecting to {BASE_URL} model={MODEL} mode={MODE}");
-Console.WriteLine($"Models configured: {ModelSettings.Describe(models)}");
 
 var jsonOpts = new JsonSerializerOptions
 {
@@ -64,44 +53,111 @@ var jsonOpts = new JsonSerializerOptions
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
 };
 
-var handler = new HttpClientHandler();
-if ((Environment.GetEnvironmentVariable("ALLOW_INSECURE_SSL") ?? "false").ToLower() == "true")
-    handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-
-var http = new HttpClient(handler) { BaseAddress = new Uri(BASE_URL) };
-
-
-// var http = new HttpClient { BaseAddress = new Uri(BASE_URL) };
-if (!string.IsNullOrWhiteSpace(API_KEY))
-    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", API_KEY);
-var store = new InMemorySessionStore();
-
-var bootstrap = MbaseBrokerSetup.Build(models);
-using var sp = bootstrap.Provider;
-var broker = bootstrap.Broker;
-// broker=EchoBroker() or EchoBroker for test
-var engine = new LlamaCppEngine(store, broker);
-
-
-
-//ISessionTransport transport = MODE switch
-//{
-//    "server" => new ServerManagedTransport(http, MODEL, CONV_STRAT),
-//    _ => new ClientManagedTransport(http, MODEL) // default
-//};
-
 var repo = SessionRepo.Load(STORE, jsonOpts);
-var mgr = new SessionManager(repo, engine, STORE, jsonOpts, SOFT_BUDGET, MODE, MODEL, models);
-var mediator = new SessionMediator(mgr);
+var launchSelection = ModelSettings.CreateLaunchSelection();
+var startupSelection = ModelSettings.ResolveStartupSelection();
 
+IReadOnlyList<ModelProfile> models = Array.Empty<ModelProfile>();
+StartupModelSelection currentSelection = launchSelection;
+IDisposable? brokerProvider = null;
+LlamaCppEngine engine = null!;
+SessionManager mgr = null!;
+SessionMediator mediator = null!;
+string BASE_URL = "";
+string MODEL = "";
+string? active = null;
 
+ApplyModelSelection(startupSelection, "Startup selection");
 
-string? active = repo.Sessions.Keys.OrderBy(k => k).FirstOrDefault();
-if (active == null) { active = "s1"; mgr.Ensure(active); }
+active = ResolveStartupSessionId(startupSelection);
+var createdFreshStartupSession = !repo.Sessions.ContainsKey(active);
+mgr.Ensure(active, resetIfExists: false);
 SyncSessionWithEngine(active);
+if (createdFreshStartupSession)
+    Console.WriteLine($"Created fresh session for current configuration: {active}");
 Console.WriteLine($"Active session: {active}");
 Console.WriteLine("Type /help for commands.\n");
 DbInit.EnsureCreated();
+
+void ApplyModelSelection(StartupModelSelection selection, string banner, bool syncActiveSession = true)
+{
+    if (selection.Models.Count == 0)
+        throw new InvalidOperationException("No models configured. Use launch settings or select a model configuration from the catalog.");
+
+    brokerProvider?.Dispose();
+
+    currentSelection = selection;
+    models = selection.Models;
+
+    var primaryModel = models[0];
+    BASE_URL = string.IsNullOrWhiteSpace(primaryModel.BaseUrl) ? "http://localhost:8080" : primaryModel.BaseUrl;
+    MODEL = primaryModel.Model;
+
+    var bootstrap = MbaseBrokerSetup.Build(models);
+    brokerProvider = bootstrap.Provider;
+    engine = new LlamaCppEngine(new InMemorySessionStore(), bootstrap.Broker);
+    mgr = new SessionManager(repo, engine, STORE, jsonOpts, SOFT_BUDGET, MODE, MODEL, models);
+    mediator = new SessionMediator(mgr);
+
+    Console.WriteLine($"{banner}: {(selection.UsesCatalog ? "catalog" : "launch settings")} name={selection.Name} source={selection.Source}");
+    Console.WriteLine($"Connecting to {BASE_URL} model={MODEL} mode={MODE}");
+    Console.WriteLine($"Models configured: {ModelSettings.Describe(models)}");
+
+    if (syncActiveSession && !string.IsNullOrWhiteSpace(active))
+        SyncSessionWithEngine(active);
+}
+
+string CreateFreshSessionIdForSelection(StartupModelSelection selection)
+{
+    var seed = string.IsNullOrWhiteSpace(selection.Name) ? MODEL : selection.Name;
+    var normalized = new string(seed
+        .Trim()
+        .Select(c => char.IsLetterOrDigit(c) ? c : '_')
+        .ToArray())
+        .Trim('_');
+
+    if (string.IsNullOrWhiteSpace(normalized))
+        normalized = "session";
+
+    var baseSid = normalized.Length <= 40 ? normalized : normalized[..40];
+    var sid = baseSid;
+    var suffix = 1;
+
+    while (repo.Sessions.ContainsKey(sid))
+    {
+        suffix++;
+        sid = $"{baseSid}_{suffix}";
+    }
+
+    return sid;
+}
+
+string ResolveStartupSessionId(StartupModelSelection selection)
+{
+    var compatible = repo.Sessions.Keys
+        .OrderBy(k => k)
+        .FirstOrDefault(SessionMatchesCurrentConfiguration);
+
+    if (!string.IsNullOrWhiteSpace(compatible))
+        return compatible;
+
+    if (repo.Sessions.Count == 0 && !selection.UsesCatalog)
+        return "s1";
+
+    return CreateFreshSessionIdForSelection(selection);
+}
+
+bool SessionMatchesCurrentConfiguration(string sid)
+{
+    if (!repo.Sessions.ContainsKey(sid))
+        return false;
+
+    if (!repo.Meta.TryGetValue(sid, out var meta) || string.IsNullOrWhiteSpace(meta.Model))
+        return true;
+
+    return models.Any(m => string.Equals(m.Model, meta.Model, StringComparison.OrdinalIgnoreCase));
+}
+
 void SyncSessionWithEngine(string sid)
 {
     // Ensure local side exists
@@ -131,6 +187,7 @@ while (true)
     {
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var cmd = parts[0].ToLowerInvariant();
+
         try
         {
             switch (cmd)
@@ -224,10 +281,36 @@ while (true)
                 case "/list":
                     var all = mgr.List();
                     Console.WriteLine(all.Count == 0 ? "(no sessions)" : string.Join(Environment.NewLine, all));
-                    break;                
+                    break;
+                case "/cfgmodels":
+                {
+                    Console.WriteLine($"Current configuration: {currentSelection.Name} [{currentSelection.Source}]");
+                    var selected = ModelSettings.PromptForConfigurationSelection(
+                        includeLaunchSelection: true,
+                        launchSelection: launchSelection,
+                        allowCancel: true);
+
+                    if (selected is null)
+                    {
+                        Console.WriteLine("configuration unchanged.");
+                        break;
+                    }
+
+                    var previousActive = active;
+                    ApplyModelSelection(selected, "Configuration switched", syncActiveSession: false);
+
+                    active = CreateFreshSessionIdForSelection(selected);
+                    mgr.Ensure(active, resetIfExists: false);
+                    SyncSessionWithEngine(active);
+
+                    if (!string.IsNullOrWhiteSpace(previousActive))
+                        Console.WriteLine($"Previous session preserved: {previousActive}");
+                    Console.WriteLine($"Created & switched to fresh session: {active}");
+                    break;
+                }
                 case "/where":
                     var meta = mgr.GetMeta(active!);
-                    Console.WriteLine($"session={active} model={mgr.GetModelForSession(active!)} temp={meta.Temperature} top_p={meta.TopP} convId={mgr.GetConversationId(active!)}");
+                    Console.WriteLine($"session={active} cfg={currentSelection.Name} source={currentSelection.Source} model={mgr.GetModelForSession(active!)} temp={meta.Temperature} top_p={meta.TopP} convId={mgr.GetConversationId(active!)}");
                     break;
 
                 case "/save":
@@ -369,6 +452,7 @@ while (true)
                     break;
 
                 case "/exit":
+                    brokerProvider?.Dispose();
                     Console.WriteLine("bye.");
                     return;
 
@@ -493,5 +577,3 @@ public record SessionMeta(string Sid, double Temperature = 0.7, double TopP = 0.
 //        return (reply, serverConvId);
 //    }
 //}
-
-

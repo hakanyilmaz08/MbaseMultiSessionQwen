@@ -138,7 +138,8 @@ public class SessionManager
 
         if (_models.Count > 0 && !_models.ContainsKey(model))
         {
-            Console.WriteLine($"[warn] model '{model}' not found in configured list: {string.Join(", ", _models.Keys)}");
+            Console.WriteLine($"[warn] model '{model}' not found in configured list: {string.Join(", ", _models.Keys)}. Falling back to '{_defaultModel}'.");
+            return _defaultModel;
         }
 
         return model;

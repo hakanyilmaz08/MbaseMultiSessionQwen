@@ -23,6 +23,7 @@ namespace MbaseMultiSessionQwen
        string? seed = null   // optional: random/LLM seed if you use it
    )
         {
+            // Keep provider/source metadata out of the run name; only the model label participates.
             string normModel = Normalize(model);
             string normGame = Normalize(game).ToUpperInvariant();
             string normContext = Normalize(context);

@@ -6,6 +6,7 @@ using Mbase.Abstractions;
 using MbaseMultiSessionQwen;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace MbaseMultiSessionQwen.Brokers;
 
@@ -38,6 +39,7 @@ public static class MbaseBrokerSetup
         // Named HttpClients used by MbaseBroker
         services.AddHttpClient("OpenAI");
         services.AddHttpClient("OpenAICompat");
+        services.AddHttpClient("OpenRouter");
         services.AddHttpClient("Ollama");
 
         // Minimal routing config – adjust to your models/backends
@@ -54,13 +56,15 @@ public static class MbaseBrokerSetup
             foreach (var model in models)
             {
                 var baseUrl = string.IsNullOrWhiteSpace(model.BaseUrl) ? defaultBase : model.BaseUrl;
-                var provider = ResolveProvider(model.Key);
+                var provider = ResolveProvider(model.Provider);
                 o.Routes[model.Model] = new ModelRoute
                 {
                     Provider = provider,
                     BaseUrl = baseUrl,
                     ApiKey = model.ApiKey,
-                    KvParamName = provider == ProviderKind.LlamaCpp ? "slot_id" : null
+                    KvParamName = provider == ProviderKind.LlamaCpp ? "slot_id" : null,
+                    Headers = model.Headers?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase)
+                        ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 };
             }
         });
@@ -73,14 +77,12 @@ public static class MbaseBrokerSetup
         var broker = sp.GetRequiredService<IModelBroker>();
         return (sp, broker);
 
-        static ProviderKind ResolveProvider(string key)
+        static ProviderKind ResolveProvider(string providerName)
         {
-            var suffix = string.IsNullOrWhiteSpace(key) ? string.Empty : $"_{key.ToUpperInvariant()}";
-            var envValue = Util.DetectEnv($"LLM_PROVIDER{suffix}", Util.DetectEnv("LLM_PROVIDER", "openai-compat"));
-
-            return envValue.Trim().ToLowerInvariant() switch
+            return providerName.Trim().ToLowerInvariant() switch
             {
                 "openai" => ProviderKind.OpenAI,
+                "openrouter" => ProviderKind.OpenRouter,
                 "ollama" => ProviderKind.Ollama,
                 "llama" => ProviderKind.LlamaCpp,
                 "llama.cpp" => ProviderKind.LlamaCpp,
