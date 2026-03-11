@@ -62,7 +62,6 @@ StartupModelSelection currentSelection = launchSelection;
 IDisposable? brokerProvider = null;
 LlamaCppEngine engine = null!;
 SessionManager mgr = null!;
-SessionMediator mediator = null!;
 string BASE_URL = "";
 string MODEL = "";
 string? active = null;
@@ -97,7 +96,6 @@ void ApplyModelSelection(StartupModelSelection selection, string banner, bool sy
     brokerProvider = bootstrap.Provider;
     engine = new LlamaCppEngine(new InMemorySessionStore(), bootstrap.Broker);
     mgr = new SessionManager(repo, engine, STORE, jsonOpts, SOFT_BUDGET, MODE, MODEL, models);
-    mediator = new SessionMediator(mgr);
 
     Console.WriteLine($"{banner}: {(selection.UsesCatalog ? "catalog" : "launch settings")} name={selection.Name} source={selection.Source}");
     Console.WriteLine($"Connecting to {BASE_URL} model={MODEL} mode={MODE}");
@@ -320,7 +318,7 @@ while (true)
 
                 case "/playipd":
                 {
-                    var ipd = new IPDRunner(mgr, mediator, models);
+                    var ipd = new IPDRunner(mgr, models);
                     var runLabel = string.Empty;
 
                     for (int run_id = 1; run_id <= 1; run_id++)
@@ -348,7 +346,7 @@ while (true)
                 }
                 case "/playisd":
                 {
-                    var isd = new ISDRunner(mgr, mediator, models);
+                    var isd = new ISDRunner(mgr, models);
                     var runLabel = string.Empty;
                     for (int run_id = 1; run_id <= 1; run_id++)
                     {
@@ -375,8 +373,8 @@ while (true)
                 }
                 case "/playboth":
                 {
-                    var ipd2 = new IPDRunner(mgr, mediator, models);
-                    var isd2 = new ISDRunner(mgr, mediator, models);
+                    var ipd2 = new IPDRunner(mgr, models);
+                    var isd2 = new ISDRunner(mgr, models);
                     var runLabel2 = string.Empty;
 
                     for (int run_id = 2; run_id <= 10; run_id++)

@@ -9,7 +9,6 @@ using System.Text.RegularExpressions;
 public class ISDRunner
 {
     private readonly SessionManager _mgr;
-    private readonly SessionMediator _med;
     private readonly IReadOnlyList<ModelProfile> _models;
 
     // Payoff matrix: (c,c)=R,R  (c,d)=S,T  (d,c)=T,S  (d,d)=P,P
@@ -18,15 +17,14 @@ public class ISDRunner
     private static readonly string DefaultRoundPromptVersion = "v1";
     private static readonly string DefaultAgentSystemPromptVersion = "v4";
 
-    public ISDRunner(SessionManager manager, SessionMediator mediator)
-        : this(manager, mediator, Array.Empty<ModelProfile>())
+    public ISDRunner(SessionManager manager)
+        : this(manager, Array.Empty<ModelProfile>())
     {
     }
 
-    public ISDRunner(SessionManager manager, SessionMediator mediator, IReadOnlyList<ModelProfile> models)
+    public ISDRunner(SessionManager manager, IReadOnlyList<ModelProfile> models)
     {
         _mgr = manager;
-        _med = mediator;
         _models = models ?? Array.Empty<ModelProfile>();
     }
 
@@ -112,8 +110,8 @@ public class ISDRunner
             var promptA = RoundPrompt(sessionA, r, lastOpponentMove: lastB, myScore: scoreA, oppScore: scoreB);
             var promptB = RoundPrompt(sessionB, r, lastOpponentMove: lastA, myScore: scoreB, oppScore: scoreA);
 
-            var rawA = await _med.SendToSessionTimedAsync(sessionA, promptA);
-            var rawB = await _med.SendToSessionTimedAsync(sessionB, promptB);
+            var rawA = await _mgr.SendTimedAsync(sessionA, promptA);
+            var rawB = await _mgr.SendTimedAsync(sessionB, promptB);
 
             var moveA = ParseMove(rawA.Reply);
             var moveB = ParseMove(rawB.Reply);
@@ -189,8 +187,8 @@ public class ISDRunner
                         myScoreAfter: scoreB,
                         oppScoreAfter: scoreA);
 
-                    var explainA = await _med.SendToSessionTimedAsync(sessionA, explainPromptA);
-                    var explainB = await _med.SendToSessionTimedAsync(sessionB, explainPromptB);
+                    var explainA = await _mgr.SendTimedAsync(sessionA, explainPromptA);
+                    var explainB = await _mgr.SendTimedAsync(sessionB, explainPromptB);
 
                     ExplanationLogger.InsertRoundExplanation(
                         model: modelA,
@@ -247,8 +245,8 @@ public class ISDRunner
                 log: log,
                 isA: false);
 
-            var postA = await _med.SendToSessionTimedAsync(sessionA, postPromptA);
-            var postB = await _med.SendToSessionTimedAsync(sessionB, postPromptB);
+            var postA = await _mgr.SendTimedAsync(sessionA, postPromptA);
+            var postB = await _mgr.SendTimedAsync(sessionB, postPromptB);
 
             ExplanationLogger.InsertPostGameExplanation(
                 model: modelA,

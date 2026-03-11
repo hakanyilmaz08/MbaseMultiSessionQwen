@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Text;
 using System.Text.Json;
 
@@ -20,8 +21,11 @@ public class SessionManager
     private readonly int _compactLastPairs;
     private readonly bool _includeBaselineSystem; // for our compact messages
     private static readonly object _convGate = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _sendLocks = new();
     private readonly ConcurrentDictionary<string, bool> _kvNeedsPrime = new();
     private readonly ConcurrentDictionary<string, Func<string>> _payoffProviders = new();
+
+    public sealed record TimedReply(string Reply, TimeSpan Elapsed);
 
     
     public SessionManager(SessionRepo repo, LlamaCppEngine engine, string storePath, JsonSerializerOptions opts, int softBudget, string mode, string defaultModel, IEnumerable<ModelProfile>? knownModels = null)
@@ -191,12 +195,41 @@ public class SessionManager
 
     public void ForceSave() => Persist();
 
-    public async Task<string> SendAsync(string sid, string userText)
+    public Task<TimedReply> SendTimedAsync(string sid, string userText)
+        => WithSessionLockAsync(sid, async () =>
+        {
+            Ensure(sid);
+            var sw = Stopwatch.StartNew();
+            var reply = await SendCoreAsync(sid, userText);
+            sw.Stop();
+            return new TimedReply(reply, sw.Elapsed);
+        });
+
+    public Task<string> SendAsync(string sid, string userText)
+        => WithSessionLockAsync(sid, async () =>
+        {
+            Ensure(sid);
+            return await SendCoreAsync(sid, userText);
+        });
+
+    private async Task<T> WithSessionLockAsync<T>(string sid, Func<Task<T>> action)
+    {
+        var gate = _sendLocks.GetOrAdd(sid, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<string> SendCoreAsync(string sid, string userText)
     {
         try
         {
-            Ensure(sid);
-
             if (!_repo.Meta.TryGetValue(sid, out var meta))
                 throw new InvalidOperationException($"No meta for sid '{sid}'. Available: [{string.Join(", ", _repo.Meta.Keys)}]");
 
