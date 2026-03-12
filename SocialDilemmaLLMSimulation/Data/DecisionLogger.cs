@@ -1,10 +1,9 @@
 ﻿using Microsoft.Data.Sqlite;
+using SocialDilemmaLLMSimulation;
 
 
 public static class DecisionLogger
 {
-    private const string ConnectionString = "Data Source=ipd_results.db";
-
     public static void InsertDecision(
         
         string model,
@@ -21,7 +20,7 @@ public static class DecisionLogger
         string? pairId = null
     )
     {
-        using var connection = new SqliteConnection(ConnectionString);
+        using var connection = new SqliteConnection(ExperimentPaths.DatabaseConnectionString);
         connection.Open();
 
         const string sql = @"
@@ -53,4 +52,3 @@ public static class DecisionLogger
         cmd.ExecuteNonQuery();
     }
 }
-

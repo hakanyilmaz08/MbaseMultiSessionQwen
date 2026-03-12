@@ -23,6 +23,34 @@
         "role": "system",
         "content": "Session=GPT_5_2_vs_Claude_4_6. You are precise, and concise."
       }
+    ],
+    "GPT_5_2_vs_Claude_4_6_2": [
+      {
+        "role": "system",
+        "content": "Session=GPT_5_2_vs_Claude_4_6_2. You are precise, and concise."
+      },
+      {
+        "role": "user",
+        "content": "hey"
+      },
+      {
+        "role": "assistant",
+        "content": "Hey\u2014what can I help you with today?"
+      }
+    ],
+    "GPT_5_2_vs_Claude_4_6_3": [
+      {
+        "role": "system",
+        "content": "Session=GPT_5_2_vs_Claude_4_6_3. You are precise, and concise."
+      },
+      {
+        "role": "user",
+        "content": "hello give me 3 tips for sleeping well"
+      },
+      {
+        "role": "assistant",
+        "content": "1) **Keep a consistent sleep schedule**  \nGo to bed and wake up at the same times every day (including weekends). This stabilizes your body clock and makes it easier to fall asleep.\n\n2) **Control light and screens before bed**  \nDim lights 1\u20132 hours before bedtime and avoid screens (phone/TV/laptop) for at least 30\u201360 minutes. If you must use a screen, lower brightness and use a blue-light filter.\n\n3) **Optimize your sleep environment**  \nAim for a **cool, dark, quiet** room (often ~17\u201319\u00B0C / 63\u201366\u00B0F). Use blackout curtains/eye mask, and consider earplugs or white noise if sound is an issue."
+      }
     ]
   },
   "meta": {
@@ -30,31 +58,57 @@
       "sid": "s1",
       "temperature": 0.7,
       "topP": 0.95,
-      "model": "Qwen2.5 7B Instruct"
+      "model": "Qwen2.5 7B Instruct",
+      "temperatureOverridden": false,
+      "topPOverridden": false
     },
     "Qwen2.5 7B Instruct_run1_v1_A": {
       "sid": "Qwen2.5 7B Instruct_run1_v1_A",
       "temperature": 0.7,
       "topP": 0.95,
-      "model": "Qwen2.5 7B Instruct"
+      "model": "Qwen2.5 7B Instruct",
+      "temperatureOverridden": false,
+      "topPOverridden": false
     },
     "Qwen2.5 7B Instruct_run1_v1_B": {
       "sid": "Qwen2.5 7B Instruct_run1_v1_B",
       "temperature": 0.7,
       "topP": 0.95,
-      "model": "Qwen2.5 7B Instruct"
+      "model": "Qwen2.5 7B Instruct",
+      "temperatureOverridden": false,
+      "topPOverridden": false
     },
     "GPT_5_2_vs_Claude_4_6": {
       "sid": "GPT_5_2_vs_Claude_4_6",
       "temperature": 0.7,
       "topP": 0.95,
-      "model": "gpt-5.2"
+      "model": "gpt-5.2",
+      "temperatureOverridden": false,
+      "topPOverridden": false
+    },
+    "GPT_5_2_vs_Claude_4_6_2": {
+      "sid": "GPT_5_2_vs_Claude_4_6_2",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "openai/gpt-5.2",
+      "temperatureOverridden": false,
+      "topPOverridden": false
+    },
+    "GPT_5_2_vs_Claude_4_6_3": {
+      "sid": "GPT_5_2_vs_Claude_4_6_3",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "openai/gpt-5.2",
+      "temperatureOverridden": false,
+      "topPOverridden": false
     }
   },
   "conversationIds": {
     "s1": null,
     "Qwen2.5 7B Instruct_run1_v1_A": null,
     "Qwen2.5 7B Instruct_run1_v1_B": null,
-    "GPT_5_2_vs_Claude_4_6": null
+    "GPT_5_2_vs_Claude_4_6": null,
+    "GPT_5_2_vs_Claude_4_6_2": "GPT_5_2_vs_Claude_4_6_2",
+    "GPT_5_2_vs_Claude_4_6_3": "GPT_5_2_vs_Claude_4_6_3"
   }
 }

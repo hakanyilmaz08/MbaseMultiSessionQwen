@@ -1,29 +1,30 @@
-﻿{
+{
   "version": "0.2.0",
   "configurations": [
     {
-      "name": ".NET Launch (QwenOnly)",
+      "name": "Launch SocialDilemmaLLMSimulation",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "build",
-      "program": "${workspaceFolder}${pathSeparator}SocialDilemmaLLMSimulation${pathSeparator}bin${pathSeparator}Debug${pathSeparator}net8.0${pathSeparator}SocialDilemmaLLMSimulation.dll",
-      "args": [],
-      "cwd": "${workspaceFolder}${pathSeparator}SocialDilemmaLLMSimulation",
-      "stopAtEntry": false,
+      "preLaunchTask": "build SocialDilemmaLLMSimulation",
+      "program": "${workspaceFolder}/SocialDilemmaLLMSimulation/bin/Debug/net8.0/SocialDilemmaLLMSimulation.dll",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
+      "stopAtEntry": false,
       "env": {
         "LLM_BASE_URL": "http://localhost:8080",
         "LLM_API_KEY": "EMPTY",
         "LLM_MODEL": "Qwen2.5 7B Instruct",
+        "LLM_PROVIDER": "openai-compat",
         "MBASE_SESSION_MODE": "server",
-        "MBASE_CONV_ID_STRATEGY": "sid",
-        "SESSIONS_PATH": "${workspaceFolder}${pathSeparator}sessions.json",
+        "SESSIONS_PATH": "sessions.json",
         "SOFT_TOKEN_BUDGET": "32000",
         "CLEAR_KV_EVERY": "10",
-        "GPU_LAYERS": "999"
+        "LLM_TEMPERATURE": "0.7",
+        "LLM_TOP_P": "0.95",
+        "MBASE_DB_PATH": "SocialDilemmaLLMSimulation/ipd_results.db",
+        "MBASE_RESULTS_DIR": "artifacts/results",
+        "MBASE_EXPORT_DIR": "artifacts/exports"
       }
     }
   ]
 }
-
-

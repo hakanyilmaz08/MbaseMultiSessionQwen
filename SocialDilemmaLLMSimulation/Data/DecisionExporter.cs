@@ -5,12 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using SocialDilemmaLLMSimulation;
 
 public static class DecisionExporter
 {
-    public static void ExportPrettyFromDecisions(string connectionString, string outputFolder)
+    public static int ExportPrettyFromDecisions(string connectionString, string outputFolder)
     {
-        Directory.CreateDirectory(outputFolder);
+        var resolvedOutputFolder = ExperimentPaths.EnsureDirectory(outputFolder);
 
         using var conn = new SqliteConnection(connectionString);
         conn.Open();
@@ -27,6 +28,7 @@ public static class DecisionExporter
             }
         }
 
+        var exportedCount = 0;
         foreach (var uniqueName in uniqueNames)
         {
             // 2) Load all rows for this game
@@ -137,9 +139,12 @@ public static class DecisionExporter
 
             // 4) Write to file, using unique_name as file name
             string safeFileName = MakeSafeFileName(uniqueName) + ".txt";
-            string fullPath = Path.Combine(outputFolder, safeFileName);
+            string fullPath = Path.Combine(resolvedOutputFolder, safeFileName);
             File.WriteAllText(fullPath, sb.ToString());
+            exportedCount++;
         }
+
+        return exportedCount;
     }
 
     private sealed class Row

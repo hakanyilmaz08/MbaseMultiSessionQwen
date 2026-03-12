@@ -1,10 +1,9 @@
 ﻿using Microsoft.Data.Sqlite;
+using SocialDilemmaLLMSimulation;
 using System;
 
 public static class ExplanationLogger
 {
-    private const string ConnectionString = "Data Source=ipd_results.db";
-
     /// <summary>
     /// Round-level explanation (e.g. every 10th round).
     /// Tied to a specific decisions row via FK.
@@ -22,7 +21,7 @@ public static class ExplanationLogger
         string? playerRole = null
     )
     {
-        using var connection = new SqliteConnection(ConnectionString);
+        using var connection = new SqliteConnection(ExperimentPaths.DatabaseConnectionString);
         connection.Open();
 
         // 1) Find corresponding decision row
@@ -101,7 +100,7 @@ public static class ExplanationLogger
         string? playerRole = null
     )
     {
-        using var connection = new SqliteConnection(ConnectionString);
+        using var connection = new SqliteConnection(ExperimentPaths.DatabaseConnectionString);
         connection.Open();
 
         long decisionId;

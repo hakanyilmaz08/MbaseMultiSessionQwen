@@ -1,13 +1,12 @@
 ﻿using Microsoft.Data.Sqlite;
+using SocialDilemmaLLMSimulation;
 
 
 public static class DbInit
 {
-    private const string ConnectionString = "Data Source=ipd_results.db";
-
     public static void EnsureCreated()
     {
-        using var connection = new SqliteConnection(ConnectionString);
+        using var connection = new SqliteConnection(ExperimentPaths.DatabaseConnectionString);
         connection.Open();
 
         var cmdText = @"

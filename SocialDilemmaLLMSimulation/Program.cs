@@ -22,6 +22,7 @@ Commands:
   /playipd                   Play iterated prisoner's dilemma
   /playisd                   Play snowdrift (iterated)
   /playboth                  Play both games (snowdrift and prisoner's dilemma) sequentially
+  /generate                  Export decision logs to text files
   /exit                      Quit
 
 Anything not starting with '/' is sent to the model in the current session.
@@ -84,4 +85,3 @@ while (true)
         Console.WriteLine($"error sending message: {ex.Message}");
     }
 }
-

@@ -360,6 +360,7 @@ In 3-6 sentences, describe what led you to that choice in this round:
 - what you inferred from earlier rounds,
 - how you interpreted the other side's behaviour,
 - and how this decision fits into your overall approach across rounds.
+- did the context affect your behavior, if it did, how?
 
 Answer in natural language only. Do not respond with just 'c' or 'd'.
 """.Trim();

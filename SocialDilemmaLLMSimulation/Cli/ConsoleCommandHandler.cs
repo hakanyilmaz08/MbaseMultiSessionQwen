@@ -166,7 +166,11 @@ public sealed class ConsoleCommandHandler
                     return CommandHandlingResult.Continue;
 
                 case "/generate":
-                    DecisionExporter.ExportPrettyFromDecisions("Data Source=ipd_results.db", AppContext.BaseDirectory);
+                    var exportDirectory = ExperimentPaths.EnsureExportsDirectory();
+                    var exportedCount = DecisionExporter.ExportPrettyFromDecisions(
+                        ExperimentPaths.DatabaseConnectionString,
+                        exportDirectory);
+                    Console.WriteLine($"exported {exportedCount} file(s) to {exportDirectory}");
                     return CommandHandlingResult.Continue;
 
                 case "/exit":
@@ -193,6 +197,7 @@ public sealed class ConsoleCommandHandler
         Func<string, int, string> durationFileName)
     {
         var runLabel = string.Empty;
+        var resultsDirectory = ExperimentPaths.EnsureResultsDirectory();
 
         for (var runId = firstRunId; runId <= lastRunId; runId++)
         {
@@ -202,12 +207,18 @@ public sealed class ConsoleCommandHandler
             {
                 Console.WriteLine($"=== {kvp.Key} ===");
                 Console.WriteLine(kvp.Value.Pretty());
-                File.WriteAllText(resultFileName(kvp.Key, actualRunLabel, runId), kvp.Value.Pretty());
+                File.WriteAllText(
+                    Path.Combine(resultsDirectory, resultFileName(kvp.Key, actualRunLabel, runId)),
+                    kvp.Value.Pretty());
             }
 
             stopwatch.Stop();
-            File.WriteAllText(durationFileName(actualRunLabel, runId), stopwatch.Elapsed.TotalSeconds.ToString());
+            File.WriteAllText(
+                Path.Combine(resultsDirectory, durationFileName(actualRunLabel, runId)),
+                stopwatch.Elapsed.TotalSeconds.ToString(CultureInfo.InvariantCulture));
         }
+
+        Console.WriteLine($"saved run outputs to {resultsDirectory}");
     }
 
     private string BuildCrossModelLabel()
@@ -219,5 +230,4 @@ public sealed class ConsoleCommandHandler
                 : _coordinator.Models.First().Model);
     }
 }
-
 
