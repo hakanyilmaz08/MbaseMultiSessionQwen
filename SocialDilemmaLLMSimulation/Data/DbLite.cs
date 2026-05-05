@@ -55,6 +55,30 @@ public static class DbInit
 
         CREATE INDEX IF NOT EXISTS idx_decision_explanations_decision_id
             ON decision_explanations (decision_id);
+
+        CREATE TABLE IF NOT EXISTS game_selection_decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            run_id INTEGER NOT NULL,
+            unique_name TEXT NOT NULL,
+
+            model TEXT NOT NULL,
+            context TEXT NOT NULL,
+            prompt_version TEXT NOT NULL,
+            player_role TEXT NOT NULL,
+
+            selected_game TEXT NOT NULL CHECK (selected_game IN ('PD', 'SD')),
+            resolved_game TEXT NOT NULL CHECK (resolved_game IN ('PD', 'SD')),
+            random_roll INTEGER,
+
+            raw_response TEXT NOT NULL,
+            explanation TEXT NOT NULL,
+
+            timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_game_selection_decisions_run_context
+            ON game_selection_decisions (run_id, context, prompt_version);
         ";
 
         using var command = connection.CreateCommand();
