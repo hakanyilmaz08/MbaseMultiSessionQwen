@@ -1,121 +1,160 @@
 {
-    "configurations":  [
-                           {
-                               "name":  "Qwen Only",
-                               "source":  "local",
-                               "models":  [
-                                              {
-                                                  "key":  "primary",
-                                                  "model":  "Qwen2.5 7B Instruct",
-                                                  "provider":  "openai-compat",
-                                                  "baseUrl":  "http://localhost:8080",
-                                                  "apiKey":  "EMPTY",
-                                                  "temperature":  0.7,
-                                                  "topP":  0.95
-                                              }
-                                          ]
-                           },
-                           {
-                               "name":  "Qwen vs Gemma",
-                               "source":  "local",
-                               "models":  [
-                                              {
-                                                  "key":  "a",
-                                                  "model":  "Qwen2.5 7B Instruct",
-                                                  "provider":  "openai-compat",
-                                                  "baseUrl":  "http://localhost:8080",
-                                                  "apiKey":  "EMPTY",
-                                                  "temperature":  0.7,
-                                                  "topP":  0.95
-                                              },
-                                              {
-                                                  "key":  "b",
-                                                  "model":  "gemma-2-9b-it",
-                                                  "provider":  "openai-compat",
-                                                  "baseUrl":  "http://localhost:8080",
-                                                  "apiKey":  "EMPTY",
-                                                  "temperature":  0.7,
-                                                  "topP":  0.95
-                                              }
-                                          ]
-                           },
-                           {
-                               "name":  "Qwen vs Llama",
-                               "source":  "local",
-                               "models":  [
-                                              {
-                                                  "key":  "a",
-                                                  "model":  "Qwen2.5 7B Instruct",
-                                                  "provider":  "openai-compat",
-                                                  "baseUrl":  "http://localhost:8080",
-                                                  "apiKey":  "EMPTY",
-                                                  "temperature":  0.7,
-                                                  "topP":  0.95
-                                              },
-                                              {
-                                                  "key":  "b",
-                                                  "model":  "Meta Llama 3.1 8B Instruct",
-                                                  "provider":  "llama",
-                                                  "baseUrl":  "http://localhost:8081",
-                                                  "apiKey":  "EMPTY",
-                                                  "temperature":  0.7,
-                                                  "topP":  0.95
-                                              }
-                                          ]
-                           },
-                           {
-                               "name":  "Llama Only",
-                               "source":  "local",
-                               "models":  [
-                                              {
-                                                  "key":  "primary",
-                                                  "model":  "Meta Llama 3.1 8B Instruct",
-                                                  "provider":  "llama",
-                                                  "baseUrl":  "http://localhost:8081",
-                                                  "apiKey":  "EMPTY",
-                                                  "temperature":  0.7,
-                                                  "topP":  0.95
-                                              }
-                                          ]
-                           },
-                           {
-                               "name":  "GPT-5.2 vs Claude 4.6",
-                               "source":  "external",
-                               "models":  [
-                                              {
-                                                  "key":  "a",
-                                                  "model":  "openai/gpt-5.2",
-                                                  "provider":  "openrouter",
-                                                  "baseUrl":  "https://openrouter.ai/api",
-                                                  "apiKeyEnv":  "OPENROUTER_API_KEY",
-                                                  "maxTokens":  2048,
-                                                  "reasoning":  {
-                                                                    "effort":  "medium"
-                                                                },
-                                                  "headers":  {
-                                                                  "X-Title":  "SocialDilemmaLLMSimulation"
-                                                              },
-                                                  "temperature":  0.7,
-                                                  "topP":  0.95
-                                              },
-                                              {
-                                                  "key":  "b",
-                                                  "model":  "anthropic/claude-opus-4.6",
-                                                  "provider":  "openrouter",
-                                                  "baseUrl":  "https://openrouter.ai/api",
-                                                  "apiKeyEnv":  "OPENROUTER_API_KEY",
-                                                  "maxTokens":  2048,
-                                                  "reasoning":  {
-                                                                    "enabled":  true,
-                                                                    "maxTokens":  1024
-                                                                },
-                                                  "headers":  {
-                                                                  "X-Title":  "SocialDilemmaLLMSimulation"
-                                                              },
-                                                  "temperature":  0.7,
-                                                  "topP":  0.95
-                                              }
-                                          ]
-                           }
-                       ]
+  "configurations": [
+    {
+      "name": "Qwen Only",
+      "source": "local",
+      "models": [
+        {
+          "key": "primary",
+          "model": "Qwen2.5 7B Instruct",
+          "provider": "openai-compat",
+          "baseUrl": "http://localhost:8080",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.95
+        }
+      ]
+    },
+    {
+      "name": "Qwen vs Gemma",
+      "source": "local",
+      "models": [
+        {
+          "key": "a",
+          "model": "Qwen2.5 7B Instruct",
+          "provider": "openai-compat",
+          "baseUrl": "http://localhost:8080",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.95
+        },
+        {
+          "key": "b",
+          "model": "gemma-2-9b-it",
+          "provider": "openai-compat",
+          "baseUrl": "http://localhost:8080",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.95
+        }
+      ]
+    },
+    {
+      "name": "Qwen vs Llama",
+      "source": "local",
+      "models": [
+        {
+          "key": "a",
+          "model": "Qwen2.5 7B Instruct",
+          "provider": "openai-compat",
+          "baseUrl": "http://localhost:8080",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.95
+        },
+        {
+          "key": "b",
+          "model": "Meta Llama 3.1 8B Instruct",
+          "provider": "llama",
+          "baseUrl": "http://localhost:8081",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.95
+        }
+      ]
+    },
+    {
+      "name": "Llama Only",
+      "source": "local",
+      "models": [
+        {
+          "key": "primary",
+          "model": "Meta Llama 3.1 8B Instruct",
+          "provider": "llama",
+          "baseUrl": "http://localhost:8081",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.95
+        }
+      ]
+    },
+    {
+      "name": "Gemma 4 31B Only",
+      "source": "local",
+      "models": [
+        {
+          "key": "primary",
+          "model": "Gemma 4 31B Instruct",
+          "provider": "openai-compat",
+          "baseUrl": "http://localhost:8082",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.9
+        }
+      ]
+    },
+    {
+      "name": "Qwen vs Gemma 4 31B",
+      "source": "local",
+      "models": [
+        {
+          "key": "a",
+          "model": "Qwen2.5 7B Instruct",
+          "provider": "openai-compat",
+          "baseUrl": "http://localhost:8080",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.95
+        },
+        {
+          "key": "b",
+          "model": "Gemma 4 31B Instruct",
+          "provider": "openai-compat",
+          "baseUrl": "http://localhost:8082",
+          "apiKey": "EMPTY",
+          "temperature": 0.7,
+          "topP": 0.9
+        }
+      ]
+    },
+    {
+      "name": "GPT-5.4 vs Claude 4.6",
+      "source": "external",
+      "models": [
+        {
+          "key": "a",
+          "model": "openai/gpt-5.4",
+          "provider": "openrouter",
+          "baseUrl": "https://openrouter.ai/api",
+          "apiKeyEnv": "OPENROUTER_API_KEY",
+          "maxTokens": 2048,
+          "reasoning": {
+            "effort": "high"
+          },
+          "headers": {
+            "X-Title": "SocialDilemmaLLMSimulation"
+          },
+          "temperature": 0.7,
+          "topP": 0.95
+        },
+        {
+          "key": "b",
+          "model": "anthropic/claude-opus-4.6",
+          "provider": "openrouter",
+          "baseUrl": "https://openrouter.ai/api",
+          "apiKeyEnv": "OPENROUTER_API_KEY",
+          "maxTokens": 2048,
+          "reasoning": {
+            "enabled": true,
+            "maxTokens": 1024
+          },
+          "headers": {
+            "X-Title": "SocialDilemmaLLMSimulation"
+          },
+          "temperature": 0.7,
+          "topP": 0.95
+        }
+      ]
+    }
+  ]
 }

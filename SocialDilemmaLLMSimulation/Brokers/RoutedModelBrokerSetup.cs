@@ -45,7 +45,7 @@ public static class RoutedModelBrokerSetup
         // Minimal routing config â€“ adjust to your models/backends
         services.Configure<RoutedModelBrokerOptions>(o =>
         {
-            o.TimeoutSeconds = 60;
+            o.TimeoutSeconds = 1200;
             o.DefaultMaxTokens = 1024;
             o.Routes = new(StringComparer.OrdinalIgnoreCase);
 
