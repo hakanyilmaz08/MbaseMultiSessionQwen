@@ -155,6 +155,10 @@ public sealed class ConsoleCommandHandler
                         (actualRunLabel, runId) => $"isd_duration_{actualRunLabel}_run{runId}.txt");
                     return CommandHandlingResult.Continue;
 
+                case "/playadaptive":
+                    await ExecuteAdaptiveRunnerAsync();
+                    return CommandHandlingResult.Continue;
+
                 case "/resetkeep":
                     _coordinator.ResetActiveSession(keepSystemPrompt: true);
                     Console.WriteLine("history cleared; system prompt kept.");
@@ -221,6 +225,32 @@ public sealed class ConsoleCommandHandler
         Console.WriteLine($"saved run outputs to {resultsDirectory}");
     }
 
+    private async Task ExecuteAdaptiveRunnerAsync()
+    {
+        var resultsDirectory = ExperimentPaths.EnsureResultsDirectory();
+        var stopwatch = Stopwatch.StartNew();
+        var result = await new AdaptiveGameRunner(_coordinator).RunAsync(rounds: 50);
+        stopwatch.Stop();
+
+        var runLabel = MakeSafeFileName(result.RunLabel);
+        foreach (var gameRun in result.GameRuns)
+        {
+            var gamePath = Path.Combine(
+                resultsDirectory,
+                MakeSafeFileName($"adaptive_run{gameRun.RunId}_{gameRun.GameCode}_{gameRun.PromptVersion}_{result.RunLabel}") + ".txt");
+            File.WriteAllText(gamePath, gameRun.Result.Pretty());
+        }
+
+        var summaryPath = Path.Combine(resultsDirectory, $"adaptive_{runLabel}.txt");
+        File.WriteAllText(summaryPath, result.Pretty());
+
+        var durationPath = Path.Combine(resultsDirectory, $"adaptive_duration_{runLabel}.txt");
+        File.WriteAllText(durationPath, stopwatch.Elapsed.TotalSeconds.ToString(CultureInfo.InvariantCulture));
+
+        Console.WriteLine(result.Pretty());
+        Console.WriteLine($"saved adaptive run output to {summaryPath}");
+    }
+
     private string BuildCrossModelLabel()
     {
         return _coordinator.Models.Select(m => m.Model).Distinct().Skip(1).Any()
@@ -229,5 +259,10 @@ public sealed class ConsoleCommandHandler
                 ? "noname"
                 : _coordinator.Models.First().Model);
     }
-}
 
+    private static string MakeSafeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
+    }
+}

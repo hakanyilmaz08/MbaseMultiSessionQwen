@@ -56,6 +56,23 @@ public abstract class RepeatedGameRunnerBase
     protected abstract IReadOnlyDictionary<string, RepeatedGameAgentPrompt> AgentPromptCatalog { get; }
     protected virtual int MaxAgentPromptVersion => 7;
 
+    public string GameCode => DecisionGameCode;
+    public string GameDisplayName => PrettyGameName;
+
+    public IReadOnlyList<string> GetAgentPromptVersions()
+        => Enumerable.Range(1, MaxAgentPromptVersion)
+            .Select(i => $"v{i}")
+            .Where(AgentPromptCatalog.ContainsKey)
+            .ToList();
+
+    public RepeatedGameAgentPrompt GetAgentPromptInfo(string version)
+    {
+        if (!AgentPromptCatalog.TryGetValue(version, out var prompt))
+            throw new ArgumentException($"No AgentSystemPrompt defined for '{version}'.", nameof(version));
+
+        return prompt;
+    }
+
     public Task<RepeatedGameResult> PlayAsyncSim(
         string sessionA,
         string sessionB,
@@ -75,6 +92,27 @@ public abstract class RepeatedGameRunnerBase
         int runId = 1)
     {
         return PlayCoreAsync(sessionA, sessionB, rounds, resetPrompts, agentPromptVersion, runId);
+    }
+
+    public Task<RepeatedGameResult> PlayVersionAsync(
+        string sessionA,
+        string sessionB,
+        string agentPromptVersion,
+        int rounds,
+        bool resetPrompts,
+        int runId,
+        string? selectedModelA = null,
+        string? selectedModelB = null)
+    {
+        return PlayCoreAsync(
+            sessionA,
+            sessionB,
+            rounds,
+            resetPrompts,
+            agentPromptVersion,
+            runId,
+            selectedModelA,
+            selectedModelB);
     }
 
     public async Task<(Dictionary<string, RepeatedGameResult> Results, string RunLabel)> RunV1ToV5SequentialAsync(
@@ -144,7 +182,7 @@ public abstract class RepeatedGameRunnerBase
 
     protected abstract (int a, int b) GetPayoff(string a, string b);
 
-    protected static string BuildRunLabel(string modelA, string modelB)
+    public static string BuildRunLabel(string modelA, string modelB)
     {
         return string.Equals(modelA, modelB, StringComparison.OrdinalIgnoreCase)
             ? modelA
@@ -423,4 +461,3 @@ Respond in natural language; do not answer with just 'c' or 'd'.
         return value is "c" or "d" ? value : null;
     }
 }
-

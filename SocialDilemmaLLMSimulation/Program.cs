@@ -22,6 +22,7 @@ Commands:
   /playipd                   Play iterated prisoner's dilemma
   /playisd                   Play snowdrift (iterated)
   /playboth                  Play both games (snowdrift and prisoner's dilemma) sequentially
+  /playadaptive              Play adaptive game-selection experiment
   /generate                  Export decision logs to text files
   /exit                      Quit
 
