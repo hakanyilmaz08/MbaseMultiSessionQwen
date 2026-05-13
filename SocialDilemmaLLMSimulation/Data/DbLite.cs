@@ -79,6 +79,18 @@ public static class DbInit
 
         CREATE INDEX IF NOT EXISTS idx_game_selection_decisions_run_context
             ON game_selection_decisions (run_id, context, prompt_version);
+
+        CREATE TABLE IF NOT EXISTS adaptive_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_label TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+            error TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_adaptive_runs_status_completed
+            ON adaptive_runs (status, completed_at);
         ";
 
         using var command = connection.CreateCommand();

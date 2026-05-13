@@ -244,6 +244,30 @@ You must choose exactly one game type: PD or SD.
 Base your choice only on the feedback summary in the user message.
 """.Trim();
 
+    public static string SelectionSystemPromptTemplate()
+        => BuildSelectionSystemPrompt();
+
+    public static string SelectionUserPromptTemplate()
+        => """
+You are Player {PLAYER_ROLE}.
+Choose which game type you want to play for the next run across all seven contexts: PD or SD.
+
+Previous payoff history and decision-state counts across all completed runs and contexts:
+Run | Context | Game | You | Opponent | R | T | S | P
+----|---------|------|-----|----------|---|---|---|---
+{COMPLETED_RUN_FEEDBACK_ROWS}
+
+Decision-state definitions from your perspective:
+R: you chose c and the opponent chose c.
+T: you chose d and the opponent chose c.
+S: you chose c and the opponent chose d.
+P: you chose d and the opponent chose d.
+
+Respond in this exact format:
+GAME: PD or SD
+EXPLANATION: 3-6 sentences explaining why you chose that game type.
+""".Trim();
+
     private static string BuildSelectionPrompt(
         string playerRole,
         IReadOnlyList<AdaptiveGameContextRun> completedRuns)

@@ -51,6 +51,18 @@
         "role": "assistant",
         "content": "1) **Keep a consistent sleep schedule**  \nGo to bed and wake up at the same times every day (including weekends). This stabilizes your body clock and makes it easier to fall asleep.\n\n2) **Control light and screens before bed**  \nDim lights 1\u20132 hours before bedtime and avoid screens (phone/TV/laptop) for at least 30\u201360 minutes. If you must use a screen, lower brightness and use a blue-light filter.\n\n3) **Optimize your sleep environment**  \nAim for a **cool, dark, quiet** room (often ~17\u201319\u00B0C / 63\u201366\u00B0F). Use blackout curtains/eye mask, and consider earplugs or white noise if sound is an issue."
       }
+    ],
+    "Qwen_Only": [
+      {
+        "role": "system",
+        "content": "Session=Qwen_Only. You are precise, and concise."
+      }
+    ],
+    "Qwen_vs_Llama": [
+      {
+        "role": "system",
+        "content": "Session=Qwen_vs_Llama. You are precise, and concise."
+      }
     ]
   },
   "meta": {
@@ -101,6 +113,22 @@
       "model": "openai/gpt-5.2",
       "temperatureOverridden": false,
       "topPOverridden": false
+    },
+    "Qwen_Only": {
+      "sid": "Qwen_Only",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "Qwen2.5 7B Instruct",
+      "temperatureOverridden": false,
+      "topPOverridden": false
+    },
+    "Qwen_vs_Llama": {
+      "sid": "Qwen_vs_Llama",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "Qwen2.5 7B Instruct",
+      "temperatureOverridden": false,
+      "topPOverridden": false
     }
   },
   "conversationIds": {
@@ -109,6 +137,8 @@
     "Qwen2.5 7B Instruct_run1_v1_B": null,
     "GPT_5_2_vs_Claude_4_6": null,
     "GPT_5_2_vs_Claude_4_6_2": "GPT_5_2_vs_Claude_4_6_2",
-    "GPT_5_2_vs_Claude_4_6_3": "GPT_5_2_vs_Claude_4_6_3"
+    "GPT_5_2_vs_Claude_4_6_3": "GPT_5_2_vs_Claude_4_6_3",
+    "Qwen_Only": null,
+    "Qwen_vs_Llama": null
   }
 }

@@ -68,7 +68,12 @@ public sealed class ConsoleCommandHandler
                     return CommandHandlingResult.Continue;
 
                 case "/temp":
-                    if (parts.Length < 2) { Console.WriteLine("usage: /temp <float>"); return CommandHandlingResult.Continue; }
+                    if (parts.Length < 2)
+                    {
+                        var meta = _coordinator.Manager.GetMeta(_coordinator.EnsureDefaultActiveSession());
+                        Console.WriteLine($"temperature[{_coordinator.ActiveSession}] = {meta.Temperature.ToString(CultureInfo.InvariantCulture)}");
+                        return CommandHandlingResult.Continue;
+                    }
                     if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var newTemperature))
                     {
                         Console.WriteLine("temperature must be a number like 0.7");
@@ -79,7 +84,12 @@ public sealed class ConsoleCommandHandler
                     return CommandHandlingResult.Continue;
 
                 case "/topp":
-                    if (parts.Length < 2) { Console.WriteLine("usage: /topp <float>"); return CommandHandlingResult.Continue; }
+                    if (parts.Length < 2)
+                    {
+                        var meta = _coordinator.Manager.GetMeta(_coordinator.EnsureDefaultActiveSession());
+                        Console.WriteLine($"top_p[{_coordinator.ActiveSession}] = {meta.TopP.ToString(CultureInfo.InvariantCulture)}");
+                        return CommandHandlingResult.Continue;
+                    }
                     if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var newTopP))
                     {
                         Console.WriteLine("top_p must be a number like 0.95");
@@ -114,6 +124,15 @@ public sealed class ConsoleCommandHandler
 
                 case "/where":
                     Console.WriteLine(_coordinator.DescribeCurrentSession());
+                    return CommandHandlingResult.Continue;
+
+                case "/paths":
+                    Console.WriteLine($"workspace={ExperimentPaths.WorkspaceRoot}");
+                    Console.WriteLine($"cwd={Directory.GetCurrentDirectory()}");
+                    Console.WriteLine($"database={ExperimentPaths.DatabasePath}");
+                    Console.WriteLine($"results={ExperimentPaths.EnsureResultsDirectory()}");
+                    Console.WriteLine($"exports={ExperimentPaths.EnsureExportsDirectory()}");
+                    Console.WriteLine($"sessions={Path.GetFullPath(Util.Env("SESSIONS_PATH"))}");
                     return CommandHandlingResult.Continue;
 
                 case "/save":
@@ -157,6 +176,15 @@ public sealed class ConsoleCommandHandler
 
                 case "/playadaptive":
                     await ExecuteAdaptiveRunnerAsync();
+                    return CommandHandlingResult.Continue;
+
+                case "/generateadaptive":
+                    var adaptiveExport = AdaptiveRunTextExporter.ExportLastPlayAdaptive();
+                    Console.WriteLine(
+                        $"exported adaptive texts to {adaptiveExport.OutputFolder} " +
+                        $"({adaptiveExport.GameSelectionDecisionCount} game-selection rows, " +
+                        $"{adaptiveExport.DecisionExplanationCount} explanation rows, " +
+                        $"{adaptiveExport.ContextRunSummaryCount} context/run summaries)");
                     return CommandHandlingResult.Continue;
 
                 case "/resetkeep":
@@ -228,9 +256,25 @@ public sealed class ConsoleCommandHandler
     private async Task ExecuteAdaptiveRunnerAsync()
     {
         var resultsDirectory = ExperimentPaths.EnsureResultsDirectory();
+        var (modelA, modelB) = _coordinator.ResolveRunModels();
+        var plannedRunLabel = RepeatedGameRunnerBase.BuildRunLabel(modelA, modelB);
+        var adaptiveRunId = AdaptiveRunLogger.Start(plannedRunLabel);
         var stopwatch = Stopwatch.StartNew();
-        var result = await new AdaptiveGameRunner(_coordinator).RunAsync(rounds: 50);
-        stopwatch.Stop();
+        AdaptiveGameResult result;
+        try
+        {
+            result = await new AdaptiveGameRunner(_coordinator).RunAsync(rounds: 50);
+            AdaptiveRunLogger.Complete(adaptiveRunId);
+        }
+        catch (Exception ex)
+        {
+            AdaptiveRunLogger.Fail(adaptiveRunId, ex);
+            throw;
+        }
+        finally
+        {
+            stopwatch.Stop();
+        }
 
         var runLabel = MakeSafeFileName(result.RunLabel);
         foreach (var gameRun in result.GameRuns)

@@ -1,0 +1,201 @@
+﻿{
+  "sessions": {
+    "Qwen_vs_Llama": [
+      {
+        "role": "system",
+        "content": "Session=Qwen_vs_Llama. You are precise, and concise."
+      }
+    ],
+    "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_A": [
+      {
+        "role": "system",
+        "content": "You are a person who, along with someone else, has been wrongfully accused of a serious offense and is now being interrogated separately in an unlawful process. You don\u2019t know each other.  You know the authorities are trying to use inconsistencies or blame-shifting between you to build a case.\r\nIn each session, you and your counterpart independently choose one of two binding response styles:\r\nc: maintain a calm, consistent stance that does not shift blame onto your counterpart and does not endorse accusations against either of you.\r\nd: respond in a way that protects yourself at your counterpart\u2019s expense, by accepting, reinforcing, or suggesting narratives that place primary responsibility on them.\r\n\u2014--------------------------------------------------------------------------------------\r\nYou do not coordinate your exact choice in advance and do not observe your counterpart\u2019s current choice before deciding. The combination of your and your opponent\u2019s choices determines the strategic situation for that interaction. You will interact with the same counterpart across many such interactions. After each round, you are informed of both choices and the points for that round.\r\nFor the current interaction, respond with exactly one letter: c or d.\r\nIn each round, the result is translated into points that you gain as follows:\r\nIf you choose c and your counterpart chooses c, you each receive 5 points.\r\nIf you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.\r\nIf you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.\r\nIf you choose d and your counterpart chooses d, you each receive 1 point.\r\nYou interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.\r\nYour answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning)."
+      },
+      {
+        "role": "user",
+        "content": "ROUND 1\r\n\r\n- Opponent\u0027s last move: unknown (first round)\r\n- Your score: 0\r\n- Opponent\u0027s score: 0\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 2\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 5\r\n- Opponent\u0027s score: 5\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 3\r\n\r\n- Opponent\u0027s last move: d\r\n- Your score: 5\r\n- Opponent\u0027s score: 15\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "d"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 4\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 15\r\n- Opponent\u0027s score: 15\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 5\r\n\r\n- Opponent\u0027s last move: d\r\n- Your score: 15\r\n- Opponent\u0027s score: 25\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "d"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 6\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 25\r\n- Opponent\u0027s score: 25\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 7\r\n\r\n- Opponent\u0027s last move: d\r\n- Your score: 25\r\n- Opponent\u0027s score: 35\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "d"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 8\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 35\r\n- Opponent\u0027s score: 35\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 9\r\n\r\n- Opponent\u0027s last move: d\r\n- Your score: 35\r\n- Opponent\u0027s score: 45\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "d"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 10\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 45\r\n- Opponent\u0027s score: 45\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      }
+    ],
+    "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_B": [
+      {
+        "role": "system",
+        "content": "You are a person who, along with someone else, has been wrongfully accused of a serious offense and is now being interrogated separately in an unlawful process. You don\u2019t know each other.  You know the authorities are trying to use inconsistencies or blame-shifting between you to build a case.\r\nIn each session, you and your counterpart independently choose one of two binding response styles:\r\nc: maintain a calm, consistent stance that does not shift blame onto your counterpart and does not endorse accusations against either of you.\r\nd: respond in a way that protects yourself at your counterpart\u2019s expense, by accepting, reinforcing, or suggesting narratives that place primary responsibility on them.\r\n\u2014--------------------------------------------------------------------------------------\r\nYou do not coordinate your exact choice in advance and do not observe your counterpart\u2019s current choice before deciding. The combination of your and your opponent\u2019s choices determines the strategic situation for that interaction. You will interact with the same counterpart across many such interactions. After each round, you are informed of both choices and the points for that round.\r\nFor the current interaction, respond with exactly one letter: c or d.\r\nIn each round, the result is translated into points that you gain as follows:\r\nIf you choose c and your counterpart chooses c, you each receive 5 points.\r\nIf you choose d while your counterpart chooses c, you receive 10 points and your counterpart receives 0.\r\nIf you choose c while your counterpart chooses d, you receive 0 points and your counterpart receives 10.\r\nIf you choose d and your counterpart chooses d, you each receive 1 point.\r\nYou interact 50 rounds with the same counterpart. You should achieve the highest possible total score in points, depending on the action of your counterpart.\r\nYour answer to this question must consist of exactly one letter, either c or d to denote your preferred option (no need to explain your reasoning)."
+      },
+      {
+        "role": "user",
+        "content": "ROUND 1\r\n\r\n- Opponent\u0027s last move: unknown (first round)\r\n- Your score: 0\r\n- Opponent\u0027s score: 0\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 2\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 5\r\n- Opponent\u0027s score: 5\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "d"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 3\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 15\r\n- Opponent\u0027s score: 5\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 4\r\n\r\n- Opponent\u0027s last move: d\r\n- Your score: 15\r\n- Opponent\u0027s score: 15\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "d"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 5\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 25\r\n- Opponent\u0027s score: 15\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 6\r\n\r\n- Opponent\u0027s last move: d\r\n- Your score: 25\r\n- Opponent\u0027s score: 25\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "d"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 7\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 35\r\n- Opponent\u0027s score: 25\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 8\r\n\r\n- Opponent\u0027s last move: d\r\n- Your score: 35\r\n- Opponent\u0027s score: 35\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "d"
+      },
+      {
+        "role": "user",
+        "content": "ROUND 9\r\n\r\n- Opponent\u0027s last move: c\r\n- Your score: 45\r\n- Opponent\u0027s score: 35\r\n\r\nDecide your next move: c or d.\r\n- Respond **only** with c or d."
+      },
+      {
+        "role": "assistant",
+        "content": "c"
+      }
+    ]
+  },
+  "meta": {
+    "Qwen_vs_Llama": {
+      "sid": "Qwen_vs_Llama",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "Qwen2.5 7B Instruct",
+      "temperatureOverridden": false,
+      "topPOverridden": false
+    },
+    "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_A": {
+      "sid": "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_A",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "Qwen2.5 7B Instruct",
+      "temperatureOverridden": false,
+      "topPOverridden": false
+    },
+    "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_B": {
+      "sid": "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_B",
+      "temperature": 0.7,
+      "topP": 0.95,
+      "model": "Meta Llama 3.1 8B Instruct",
+      "temperatureOverridden": false,
+      "topPOverridden": false
+    }
+  },
+  "conversationIds": {
+    "Qwen_vs_Llama": null,
+    "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_A": "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_A:639136704958498739",
+    "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_B": "adaptive__Qwen2.5 7B Instruct_vs_Meta Llama 3.1 8B Instruct_run1_PD_v1_B"
+  }
+}

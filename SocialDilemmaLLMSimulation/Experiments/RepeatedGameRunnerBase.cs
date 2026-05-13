@@ -73,6 +73,45 @@ public abstract class RepeatedGameRunnerBase
         return prompt;
     }
 
+    public static string PreviousChoiceExplanationPromptTemplate()
+        => """
+You have just completed round {ROUND}.
+In that round, you chose {YOUR_MOVE}, and the other side chose {OPPONENT_MOVE}.
+
+Before this round, the cumulative scores were:
+- you: {YOUR_SCORE_BEFORE}
+- other side: {OPPONENT_SCORE_BEFORE}
+
+After this round, the cumulative scores are:
+- you: {YOUR_SCORE_AFTER}
+- other side: {OPPONENT_SCORE_AFTER}
+
+In 3-6 sentences, describe what led you to that choice in this round:
+- what you inferred from earlier rounds,
+- how you interpreted the other side's behaviour,
+- and how this decision fits into your overall approach across rounds.
+- did the context affect your behavior, if it did, how?
+
+Answer in natural language only. Do not respond with just 'c' or 'd'.
+""".Trim();
+
+    public static string PostGameStrategyExplanationPromptTemplate()
+        => """
+You have completed {ROUNDS} repeated rounds with the same other side.
+Your final cumulative score is {YOUR_FINAL_SCORE}; the other side's final score is {OPPONENT_FINAL_SCORE}.
+Across these {ROUNDS} rounds, you chose:
+- 'c' in {COOPERATE_COUNT} rounds
+- 'd' in {DEFECT_COUNT} rounds.
+
+In 5-10 sentences, explain your overall approach during these rounds:
+- how you decided to start out,
+- how you reacted to the other side's behaviour over time,
+- whether you aimed for stable cooperation, punishment of defection, consistent defection, or something else,
+- and how you now evaluate the outcome and your choices in hindsight.
+
+Respond in natural language; do not answer with just 'c' or 'd'.
+""".Trim();
+
     public Task<RepeatedGameResult> PlayAsyncSim(
         string sessionA,
         string sessionB,

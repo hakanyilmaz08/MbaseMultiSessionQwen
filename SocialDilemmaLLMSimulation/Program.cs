@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 
 var store = Util.Env("SESSIONS_PATH");
 var mode = Util.Env("MBASE_SESSION_MODE").ToLowerInvariant();
+ExperimentPaths.UseWorkspaceAsCurrentDirectory();
 
 const string HelpText = """
 Commands:
@@ -14,9 +15,10 @@ Commands:
   /new <sid>                 Create and switch to a new session
   /rename <old> <new>        Rename a session
   /delete <sid>              Delete a session
-  /temp <value>              Override temperature for current session (e.g., /temp 0.3)
-  /topp <value>              Override top_p for current session (e.g., /topp 0.9)
+  /temp [value]              Show or override temperature for current session (e.g., /temp 0.3)
+  /topp [value]              Show or override top_p for current session (e.g., /topp 0.9)
   /where                     Show current session + settings (+ conversation_id if any)
+  /paths                     Show database, results, export, and session paths
   /cfgmodels                 Switch model/provider configuration
   /save                      Force save to disk
   /playipd                   Play iterated prisoner's dilemma
@@ -24,6 +26,7 @@ Commands:
   /playboth                  Play both games (snowdrift and prisoner's dilemma) sequentially
   /playadaptive              Play adaptive game-selection experiment
   /generate                  Export decision logs to text files
+  /generateadaptive          Export last adaptive game-selection and explanation logs
   /exit                      Quit
 
 Anything not starting with '/' is sent to the model in the current session.
@@ -52,8 +55,9 @@ var commandHandler = new ConsoleCommandHandler(coordinator, HelpText);
 Console.WriteLine($"Active session: {coordinator.ActiveSession}");
 if (createdFreshStartupSession)
     Console.WriteLine($"Created fresh session for current configuration: {coordinator.ActiveSession}");
-Console.WriteLine("Type /help for commands.\n");
 DbInit.EnsureCreated();
+Console.WriteLine($"SQLite database: {ExperimentPaths.DatabasePath}");
+Console.WriteLine("Type /help for commands.\n");
 
 while (true)
 {

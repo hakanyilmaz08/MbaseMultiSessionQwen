@@ -12,7 +12,10 @@
                                                                        "SOFT_TOKEN_BUDGET":  "32000",
                                                                        "CLEAR_KV_EVERY":  "10",
                                                                        "LLM_TEMPERATURE":  "0.7",
-                                                                       "LLM_TOP_P":  "0.95"
+                                                                       "LLM_TOP_P":  "0.95",
+                                                                       "MBASE_DB_PATH":  "SocialDilemmaLLMSimulation/ipd_results.db",
+                                                                       "MBASE_RESULTS_DIR":  "artifacts/results",
+                                                                       "MBASE_EXPORT_DIR":  "artifacts/exports"
                                                                    }
                                       }
                  }
