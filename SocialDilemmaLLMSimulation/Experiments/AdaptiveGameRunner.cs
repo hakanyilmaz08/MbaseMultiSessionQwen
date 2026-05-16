@@ -253,14 +253,20 @@ You are Player {PLAYER_ROLE}.
 Choose which game type you want to play for the next run across all seven contexts: PD or SD.
 
 Previous payoff history and decision-state counts across all completed runs and contexts:
-Run | Context | Game | You | Opponent | R | T | S | P
-----|---------|------|-----|----------|---|---|---|---
+Decision-state payoff values by game type from your perspective:
+Game | R score | S score | T score | P score
+-----|---------|---------|---------|--------
+PD | 5 | 0 | 10 | 1
+SD | 5 | 1 | 10 | 0
+
+Run | Context | Game | You | Opponent | R count | S count | T count | P count
+----|---------|------|-----|----------|---------|---------|---------|--------
 {COMPLETED_RUN_FEEDBACK_ROWS}
 
 Decision-state definitions from your perspective:
 R: you chose c and the opponent chose c.
-T: you chose d and the opponent chose c.
 S: you chose c and the opponent chose d.
+T: you chose d and the opponent chose c.
 P: you chose d and the opponent chose d.
 
 Respond in this exact format:
@@ -277,21 +283,27 @@ EXPLANATION: 3-6 sentences explaining why you chose that game type.
         sb.AppendLine("Choose which game type you want to play for the next run across all seven contexts: PD or SD.");
         sb.AppendLine();
         sb.AppendLine("Previous payoff history and decision-state counts across all completed runs and contexts:");
-        sb.AppendLine("Run | Context | Game | You | Opponent | R | T | S | P");
-        sb.AppendLine("----|---------|------|-----|----------|---|---|---|---");
+        sb.AppendLine("Decision-state payoff values by game type from your perspective:");
+        sb.AppendLine("Game | R score | S score | T score | P score");
+        sb.AppendLine("-----|---------|---------|---------|--------");
+        sb.AppendLine("PD | 5 | 0 | 10 | 1");
+        sb.AppendLine("SD | 5 | 1 | 10 | 0");
+        sb.AppendLine();
+        sb.AppendLine("Run | Context | Game | You | Opponent | R count | S count | T count | P count");
+        sb.AppendLine("----|---------|------|-----|----------|---------|---------|---------|--------");
 
         foreach (var run in completedRuns.OrderBy(r => r.RunId).ThenBy(r => r.PromptVersion))
         {
             var summary = PlayerStateSummary.From(run.Result, playerRole);
             sb.AppendLine(
-                $"{run.RunId} | {run.ContextTitle} ({run.PromptVersion}) | {run.GameCode} | {summary.Score} | {summary.OpponentScore} | {summary.R} | {summary.T} | {summary.S} | {summary.P}");
+                $"{run.RunId} | {run.ContextTitle} ({run.PromptVersion}) | {run.GameCode} | {summary.Score} | {summary.OpponentScore} | {summary.R} | {summary.S} | {summary.T} | {summary.P}");
         }
 
         sb.AppendLine();
         sb.AppendLine("Decision-state definitions from your perspective:");
         sb.AppendLine("R: you chose c and the opponent chose c.");
-        sb.AppendLine("T: you chose d and the opponent chose c.");
         sb.AppendLine("S: you chose c and the opponent chose d.");
+        sb.AppendLine("T: you chose d and the opponent chose c.");
         sb.AppendLine("P: you chose d and the opponent chose d.");
         sb.AppendLine();
         sb.AppendLine("Respond in this exact format:");
