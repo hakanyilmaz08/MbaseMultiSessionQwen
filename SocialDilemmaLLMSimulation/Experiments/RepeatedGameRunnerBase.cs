@@ -74,43 +74,22 @@ public abstract class RepeatedGameRunnerBase
     }
 
     public static string PreviousChoiceExplanationPromptTemplate()
-        => """
-You have just completed round {ROUND}.
-In that round, you chose {YOUR_MOVE}, and the other side chose {OPPONENT_MOVE}.
-
-Before this round, the cumulative scores were:
-- you: {YOUR_SCORE_BEFORE}
-- other side: {OPPONENT_SCORE_BEFORE}
-
-After this round, the cumulative scores are:
-- you: {YOUR_SCORE_AFTER}
-- other side: {OPPONENT_SCORE_AFTER}
-
-In 3-6 sentences, describe what led you to that choice in this round:
-- what you inferred from earlier rounds,
-- how you interpreted the other side's behaviour,
-- and how this decision fits into your overall approach across rounds.
-- did the context affect your behavior, if it did, how?
-
-Answer in natural language only. Do not respond with just 'c' or 'd'.
-""".Trim();
+        => BuildPreviousChoiceExplanationPromptText(
+            "{ROUND}",
+            "{YOUR_MOVE}",
+            "{OPPONENT_MOVE}",
+            "{YOUR_SCORE_BEFORE}",
+            "{OPPONENT_SCORE_BEFORE}",
+            "{YOUR_SCORE_AFTER}",
+            "{OPPONENT_SCORE_AFTER}");
 
     public static string PostGameStrategyExplanationPromptTemplate()
-        => """
-You have completed {ROUNDS} repeated rounds with the same other side.
-Your final cumulative score is {YOUR_FINAL_SCORE}; the other side's final score is {OPPONENT_FINAL_SCORE}.
-Across these {ROUNDS} rounds, you chose:
-- 'c' in {COOPERATE_COUNT} rounds
-- 'd' in {DEFECT_COUNT} rounds.
-
-In 5-10 sentences, explain your overall approach during these rounds:
-- how you decided to start out,
-- how you reacted to the other side's behaviour over time,
-- whether you aimed for stable cooperation, punishment of defection, consistent defection, or something else,
-- and how you now evaluate the outcome and your choices in hindsight.
-
-Respond in natural language; do not answer with just 'c' or 'd'.
-""".Trim();
+        => BuildPostGameStrategyExplanationPromptText(
+            "{ROUNDS}",
+            "{YOUR_FINAL_SCORE}",
+            "{OPPONENT_FINAL_SCORE}",
+            "{COOPERATE_COUNT}",
+            "{DEFECT_COUNT}");
 
     public Task<RepeatedGameResult> PlayAsyncSim(
         string sessionA,
@@ -421,9 +400,28 @@ Respond in natural language; do not answer with just 'c' or 'd'.
             _ => $"'{opponentMove}'"
         };
 
+        return BuildPreviousChoiceExplanationPromptText(
+            round.ToString(),
+            myLabel,
+            oppLabel,
+            myScoreBefore.ToString(),
+            oppScoreBefore.ToString(),
+            myScoreAfter.ToString(),
+            oppScoreAfter.ToString());
+    }
+
+    private static string BuildPreviousChoiceExplanationPromptText(
+        string round,
+        string myMove,
+        string opponentMove,
+        string myScoreBefore,
+        string oppScoreBefore,
+        string myScoreAfter,
+        string oppScoreAfter)
+    {
         return $"""
 You have just completed round {round}.
-In that round, you chose {myLabel}, and the other side chose {oppLabel}.
+In that round, you chose {myMove}, and the other side chose {opponentMove}.
 
 Before this round, the cumulative scores were:
 - you: {myScoreBefore}
@@ -462,6 +460,21 @@ Answer in natural language only. Do not respond with just 'c' or 'd'.
             else if (move is "d" or "D") dCount++;
         }
 
+        return BuildPostGameStrategyExplanationPromptText(
+            rounds.ToString(),
+            myFinalScore.ToString(),
+            oppFinalScore.ToString(),
+            cCount.ToString(),
+            dCount.ToString());
+    }
+
+    private static string BuildPostGameStrategyExplanationPromptText(
+        string rounds,
+        string myFinalScore,
+        string oppFinalScore,
+        string cCount,
+        string dCount)
+    {
         return $"""
 You have completed {rounds} repeated rounds with the same other side.
 Your final cumulative score is {myFinalScore}; the other side's final score is {oppFinalScore}.

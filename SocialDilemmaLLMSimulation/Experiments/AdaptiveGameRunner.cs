@@ -248,35 +248,20 @@ Base your choice only on the feedback summary in the user message.
         => BuildSelectionSystemPrompt();
 
     public static string SelectionUserPromptTemplate()
-        => """
-You are Player {PLAYER_ROLE}.
-Choose which game type you want to play for the next run across all seven contexts: PD or SD.
-
-Previous payoff history and decision-state counts across all completed runs and contexts:
-Decision-state payoff values by game type from your perspective:
-Game | R score | S score | T score | P score
------|---------|---------|---------|--------
-PD | 5 | 0 | 10 | 1
-SD | 5 | 1 | 10 | 0
-
-Run | Context | Game | You | Opponent | R count | S count | T count | P count
-----|---------|------|-----|----------|---------|---------|---------|--------
-{COMPLETED_RUN_FEEDBACK_ROWS}
-
-Decision-state definitions from your perspective:
-R: you chose c and the opponent chose c.
-S: you chose c and the opponent chose d.
-T: you chose d and the opponent chose c.
-P: you chose d and the opponent chose d.
-
-Respond in this exact format:
-GAME: PD or SD
-EXPLANATION: 3-6 sentences explaining why you chose that game type.
-""".Trim();
+        => BuildSelectionPrompt(
+            "{PLAYER_ROLE}",
+            new[] { "{COMPLETED_RUN_FEEDBACK_ROWS}" });
 
     private static string BuildSelectionPrompt(
         string playerRole,
         IReadOnlyList<AdaptiveGameContextRun> completedRuns)
+        => BuildSelectionPrompt(
+            playerRole,
+            BuildSelectionFeedbackRows(playerRole, completedRuns));
+
+    private static string BuildSelectionPrompt(
+        string playerRole,
+        IEnumerable<string> completedRunFeedbackRows)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"You are Player {playerRole}.");
@@ -292,12 +277,8 @@ EXPLANATION: 3-6 sentences explaining why you chose that game type.
         sb.AppendLine("Run | Context | Game | You | Opponent | R count | S count | T count | P count");
         sb.AppendLine("----|---------|------|-----|----------|---------|---------|---------|--------");
 
-        foreach (var run in completedRuns.OrderBy(r => r.RunId).ThenBy(r => r.PromptVersion))
-        {
-            var summary = PlayerStateSummary.From(run.Result, playerRole);
-            sb.AppendLine(
-                $"{run.RunId} | {run.ContextTitle} ({run.PromptVersion}) | {run.GameCode} | {summary.Score} | {summary.OpponentScore} | {summary.R} | {summary.S} | {summary.T} | {summary.P}");
-        }
+        foreach (var row in completedRunFeedbackRows)
+            sb.AppendLine(row);
 
         sb.AppendLine();
         sb.AppendLine("Decision-state definitions from your perspective:");
@@ -310,6 +291,17 @@ EXPLANATION: 3-6 sentences explaining why you chose that game type.
         sb.AppendLine("GAME: PD or SD");
         sb.AppendLine("EXPLANATION: 3-6 sentences explaining why you chose that game type.");
         return sb.ToString().Trim();
+    }
+
+    private static IEnumerable<string> BuildSelectionFeedbackRows(
+        string playerRole,
+        IReadOnlyList<AdaptiveGameContextRun> completedRuns)
+    {
+        foreach (var run in completedRuns.OrderBy(r => r.RunId).ThenBy(r => r.PromptVersion))
+        {
+            var summary = PlayerStateSummary.From(run.Result, playerRole);
+            yield return $"{run.RunId} | {run.ContextTitle} ({run.PromptVersion}) | {run.GameCode} | {summary.Score} | {summary.OpponentScore} | {summary.R} | {summary.S} | {summary.T} | {summary.P}";
+        }
     }
 
     private int NextRoll()
