@@ -23,6 +23,11 @@ This repository is a .NET 8 research and experimentation project for running mul
 - Use `rg` / `rg --files` for search instead of slower tools when possible.
 - Do not introduce new dependencies unless they are necessary for the task.
 
+## Git Sync Workflow
+
+- After any prompt that changes code or project Markdown/documentation files, run meaningful verification, commit the relevant project changes, sync with GitHub, and push the commit.
+- Do not include machine-local files such as `.DS_Store` or IDE metadata unless the user explicitly asks.
+
 ## Reproducibility Rules
 
 - Treat changes to prompts, model selection, sampling parameters, session state handling, logging, and result export as experiment-affecting changes.
@@ -73,5 +78,4 @@ Analyze before implementing when the task involves:
 - Be concise and specific about what changed.
 - Mention any reproducibility-sensitive behavior changes.
 - Mention verification performed, and any verification you could not run.
-
 
