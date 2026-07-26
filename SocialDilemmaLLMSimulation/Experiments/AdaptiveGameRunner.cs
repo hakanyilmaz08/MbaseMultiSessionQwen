@@ -74,7 +74,10 @@ public sealed class AdaptiveGameRunner
             _seededRandom = new Random(seed);
     }
 
-    public async Task<AdaptiveGameResult> RunAsync(string baseSessionPrefix = "adaptive", int rounds = 50)
+    public async Task<AdaptiveGameResult> RunAsync(
+        string baseSessionPrefix = "adaptive",
+        int rounds = 50,
+        long? experimentRunId = null)
     {
         var (modelA, modelB) = _sessionCoordinator.ResolveRunModels();
         var runLabel = RepeatedGameRunnerBase.BuildRunLabel(modelA, modelB);
@@ -92,10 +95,30 @@ public sealed class AdaptiveGameRunner
         var selections = new List<AdaptiveSelectionRow>(TotalRuns - 2);
 
         foreach (var version in versions)
-            gameRuns.Add(await PlayContextGameAsync(_pdRunner, sessionPrefix, version, runId: 1, rounds, modelA, modelB));
+        {
+            gameRuns.Add(await PlayContextGameAsync(
+                _pdRunner,
+                sessionPrefix,
+                version,
+                runId: 1,
+                rounds,
+                modelA,
+                modelB,
+                experimentRunId));
+        }
 
         foreach (var version in versions)
-            gameRuns.Add(await PlayContextGameAsync(_sdRunner, sessionPrefix, version, runId: 2, rounds, modelA, modelB));
+        {
+            gameRuns.Add(await PlayContextGameAsync(
+                _sdRunner,
+                sessionPrefix,
+                version,
+                runId: 2,
+                rounds,
+                modelA,
+                modelB,
+                experimentRunId));
+        }
 
         for (var runId = FirstAdaptiveRun; runId <= TotalRuns; runId++)
         {
@@ -105,14 +128,23 @@ public sealed class AdaptiveGameRunner
                 runId,
                 feedbackSnapshot,
                 modelA,
-                modelB);
+                modelB,
+                experimentRunId);
 
             selections.Add(selection);
             var runner = selection.ResolvedGame == "PD" ? _pdRunner : _sdRunner;
 
             foreach (var version in versions)
             {
-                gameRuns.Add(await PlayContextGameAsync(runner, sessionPrefix, version, runId, rounds, modelA, modelB));
+                gameRuns.Add(await PlayContextGameAsync(
+                    runner,
+                    sessionPrefix,
+                    version,
+                    runId,
+                    rounds,
+                    modelA,
+                    modelB,
+                    experimentRunId));
             }
         }
 
@@ -126,7 +158,8 @@ public sealed class AdaptiveGameRunner
         int runId,
         int rounds,
         string modelA,
-        string modelB)
+        string modelB,
+        long? experimentRunId)
     {
         var contextTitle = runner.GetAgentPromptInfo(version).Title;
         var sessionBase = $"{sessionPrefix}_run{runId}_{runner.GameCode}_{version}";
@@ -146,7 +179,8 @@ public sealed class AdaptiveGameRunner
                 resetPrompts: true,
                 runId,
                 modelA,
-                modelB);
+                modelB,
+                experimentRunId);
 
             return new AdaptiveGameContextRun(runId, version, contextTitle, runner.GameCode, result);
         }
@@ -162,7 +196,8 @@ public sealed class AdaptiveGameRunner
         int runId,
         IReadOnlyList<AdaptiveGameContextRun> feedbackSnapshot,
         string modelA,
-        string modelB)
+        string modelB,
+        long? experimentRunId)
     {
         const string selectionContext = "All Contexts";
         const string selectionPromptVersion = "all";
@@ -194,30 +229,35 @@ public sealed class AdaptiveGameRunner
                 : randomRoll > 50 ? "PD" : "SD";
 
             var uniqueName = BuildSelectionUniqueName(sessionPrefix, runId);
-            GameSelectionLogger.InsertSelection(
-                runId,
-                uniqueName,
-                modelA,
-                selectionContext,
-                selectionPromptVersion,
-                "A",
-                choiceA,
-                resolvedGame,
-                randomRoll,
-                rawA.Reply.Trim(),
-                ExtractExplanation(rawA.Reply));
-            GameSelectionLogger.InsertSelection(
-                runId,
-                uniqueName,
-                modelB,
-                selectionContext,
-                selectionPromptVersion,
-                "B",
-                choiceB,
-                resolvedGame,
-                randomRoll,
-                rawB.Reply.Trim(),
-                ExtractExplanation(rawB.Reply));
+            GameSelectionLogger.InsertSelections(
+                experimentRunId,
+                new[]
+                {
+                    new GameSelectionWrite(
+                        runId,
+                        uniqueName,
+                        modelA,
+                        selectionContext,
+                        selectionPromptVersion,
+                        "A",
+                        choiceA,
+                        resolvedGame,
+                        randomRoll,
+                        rawA.Reply.Trim(),
+                        ExtractExplanation(rawA.Reply)),
+                    new GameSelectionWrite(
+                        runId,
+                        uniqueName,
+                        modelB,
+                        selectionContext,
+                        selectionPromptVersion,
+                        "B",
+                        choiceB,
+                        resolvedGame,
+                        randomRoll,
+                        rawB.Reply.Trim(),
+                        ExtractExplanation(rawB.Reply))
+                });
 
             Console.WriteLine(
                 $"[Adaptive selection] run={runId} A={choiceA} B={choiceB} resolved={resolvedGame} roll={(randomRoll?.ToString() ?? "-")}");
@@ -272,8 +312,8 @@ Base your choice only on the feedback summary in the user message.
         sb.AppendLine("Decision-state payoff values by game type from your perspective:");
         sb.AppendLine("Game | R score | S score | T score | P score");
         sb.AppendLine("-----|---------|---------|---------|--------");
-        sb.AppendLine("PD | 5 | 0 | 10 | 1");
-        sb.AppendLine("SD | 5 | 1 | 10 | 0");
+        foreach (var definition in RepeatedGameDefinitions.All)
+            sb.AppendLine(definition.BuildRtspScoreRow());
         sb.AppendLine();
         sb.AppendLine("Run | Context | Game | You | Opponent | R count | S count | T count | P count");
         sb.AppendLine("----|---------|------|-----|----------|---------|---------|---------|--------");

@@ -1,9 +1,19 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 
 namespace SocialDilemmaLLMSimulation;
 
-public sealed record RepeatedGameAgentPrompt(string Title, Func<string, string> BuildPrompt);
+public sealed record RepeatedGameAgentPrompt(
+    string Title,
+    Func<string, string, string> BuildPromptText)
+{
+    public string BuildPrompt(string playerName, int rounds)
+        => BuildPromptText(playerName, rounds.ToString(CultureInfo.InvariantCulture));
+
+    public string BuildPromptTemplate()
+        => BuildPromptText("{PLAYER_NAME}", "{ROUNDS}");
+}
 
 public sealed record RepeatedGameRoundRow(
     int Round,
@@ -47,17 +57,17 @@ public abstract class RepeatedGameRunnerBase
         _sessionCoordinator = sessionCoordinator;
     }
 
-    protected abstract string PrettyGameName { get; }
-    protected abstract string DecisionGameCode { get; }
-    protected abstract string UniqueNameGameCode { get; }
-    protected abstract string DefaultRoundPromptVersion { get; }
-    protected abstract string DefaultAgentSystemPromptVersion { get; }
-    protected abstract IReadOnlyDictionary<string, Func<int, string?, int, int, string>> RoundPromptCatalog { get; }
-    protected abstract IReadOnlyDictionary<string, RepeatedGameAgentPrompt> AgentPromptCatalog { get; }
+    protected abstract RepeatedGameDefinition Definition { get; }
+    protected virtual string DefaultRoundPromptVersion => "v1";
+    protected virtual string DefaultAgentSystemPromptVersion => "v4";
+    protected IReadOnlyDictionary<string, Func<int, int, string?, int, int, string>> RoundPromptCatalog
+        => RepeatedGamePromptCatalog.RoundPrompts;
+    protected IReadOnlyDictionary<string, RepeatedGameAgentPrompt> AgentPromptCatalog
+        => RepeatedGamePromptCatalog.AgentPromptsFor(Definition);
     protected virtual int MaxAgentPromptVersion => 7;
 
-    public string GameCode => DecisionGameCode;
-    public string GameDisplayName => PrettyGameName;
+    public string GameCode => Definition.DecisionCode;
+    public string GameDisplayName => Definition.PrettyName;
 
     public IReadOnlyList<string> GetAgentPromptVersions()
         => Enumerable.Range(1, MaxAgentPromptVersion)
@@ -96,9 +106,17 @@ public abstract class RepeatedGameRunnerBase
         string sessionB,
         int rounds = 50,
         bool resetPrompts = false,
-        int runId = 1)
+        int runId = 1,
+        long? experimentRunId = null)
     {
-        return PlayCoreAsync(sessionA, sessionB, rounds, resetPrompts, DefaultAgentSystemPromptVersion, runId);
+        return PlayCoreAsync(
+            sessionA,
+            sessionB,
+            rounds,
+            resetPrompts,
+            DefaultAgentSystemPromptVersion,
+            runId,
+            experimentRunId: experimentRunId);
     }
 
     public Task<RepeatedGameResult> PlayAsyncSim(
@@ -107,9 +125,17 @@ public abstract class RepeatedGameRunnerBase
         string agentPromptVersion,
         int rounds = 50,
         bool resetPrompts = false,
-        int runId = 1)
+        int runId = 1,
+        long? experimentRunId = null)
     {
-        return PlayCoreAsync(sessionA, sessionB, rounds, resetPrompts, agentPromptVersion, runId);
+        return PlayCoreAsync(
+            sessionA,
+            sessionB,
+            rounds,
+            resetPrompts,
+            agentPromptVersion,
+            runId,
+            experimentRunId: experimentRunId);
     }
 
     public Task<RepeatedGameResult> PlayVersionAsync(
@@ -120,7 +146,8 @@ public abstract class RepeatedGameRunnerBase
         bool resetPrompts,
         int runId,
         string? selectedModelA = null,
-        string? selectedModelB = null)
+        string? selectedModelB = null,
+        long? experimentRunId = null)
     {
         return PlayCoreAsync(
             sessionA,
@@ -130,7 +157,8 @@ public abstract class RepeatedGameRunnerBase
             agentPromptVersion,
             runId,
             selectedModelA,
-            selectedModelB);
+            selectedModelB,
+            experimentRunId);
     }
 
     public async Task<(Dictionary<string, RepeatedGameResult> Results, string RunLabel)> RunV1ToV5SequentialAsync(
@@ -138,7 +166,8 @@ public abstract class RepeatedGameRunnerBase
         int rounds = 50,
         bool resetPrompts = true,
         bool clearSessions = true,
-        int runId = 1)
+        int runId = 1,
+        long? experimentRunId = null)
     {
         var results = new Dictionary<string, RepeatedGameResult>();
         var (modelA, modelB) = _sessionCoordinator.ResolveRunModels();
@@ -159,7 +188,7 @@ public abstract class RepeatedGameRunnerBase
                 continue;
             }
 
-            var sessionPrefix = $"{effectivePrefix}_{DecisionGameCode}_exec{executionTag}_run{runId}";
+            var sessionPrefix = $"{effectivePrefix}_{Definition.DecisionCode}_exec{executionTag}_run{runId}";
             var sessionA = $"{sessionPrefix}_{version}_A";
             var sessionB = $"{sessionPrefix}_{version}_B";
 
@@ -177,7 +206,8 @@ public abstract class RepeatedGameRunnerBase
                     version,
                     runId,
                     modelA,
-                    modelB);
+                    modelB,
+                    experimentRunId);
 
                 results[version] = result;
                 Console.WriteLine(result.Pretty());
@@ -193,8 +223,6 @@ public abstract class RepeatedGameRunnerBase
         Console.WriteLine("Elapsed Time (ms): " + sw.ElapsedMilliseconds);
         return (results, runModelLabel);
     }
-
-    protected abstract (int a, int b) GetPayoff(string a, string b);
 
     public static string BuildRunLabel(string modelA, string modelB)
     {
@@ -214,11 +242,14 @@ public abstract class RepeatedGameRunnerBase
         string agentPromptVersion,
         int runId,
         string? selectedModelA = null,
-        string? selectedModelB = null)
+        string? selectedModelB = null,
+        long? experimentRunId = null)
     {
         var log = new List<RepeatedGameRoundRow>(rounds);
         var scoreA = 0;
         var scoreB = 0;
+        var decisions = new List<ContextDecisionWrite>(rounds * 2);
+        var explanations = new List<ContextExplanationWrite>((rounds / 10 + 1) * 2);
 
         var (modelA, modelB) = _sessionCoordinator.ResolveRunModels(selectedModelA, selectedModelB);
         var runModelLabel = BuildRunLabel(modelA, modelB);
@@ -249,8 +280,16 @@ public abstract class RepeatedGameRunnerBase
             return sb.ToString();
         }
 
-        _sessionCoordinator.PrepareExperimentSession(sessionA, modelA, GetAgentSystemPromptString("Player A", agentPromptVersion), resetPrompts);
-        _sessionCoordinator.PrepareExperimentSession(sessionB, modelB, GetAgentSystemPromptString("Player B", agentPromptVersion), resetPrompts);
+        _sessionCoordinator.PrepareExperimentSession(
+            sessionA,
+            modelA,
+            GetAgentSystemPromptString("Player A", rounds, agentPromptVersion),
+            resetPrompts);
+        _sessionCoordinator.PrepareExperimentSession(
+            sessionB,
+            modelB,
+            GetAgentSystemPromptString("Player B", rounds, agentPromptVersion),
+            resetPrompts);
 
         string? lastA = null;
         string? lastB = null;
@@ -258,7 +297,7 @@ public abstract class RepeatedGameRunnerBase
 
         var uniqueName = Util.CreateUniqueName(
             model: runModelLabel,
-            game: UniqueNameGameCode,
+            game: Definition.UniqueNameCode,
             context: title,
             promptVersion: agentPromptVersion,
             rounds: rounds,
@@ -271,8 +310,8 @@ public abstract class RepeatedGameRunnerBase
             var scoreABefore = scoreA;
             var scoreBBefore = scoreB;
 
-            var promptA = RoundPrompt(sessionA, round, lastB, scoreA, scoreB);
-            var promptB = RoundPrompt(sessionB, round, lastA, scoreB, scoreA);
+            var promptA = RoundPrompt(sessionA, rounds, round, lastB, scoreA, scoreB);
+            var promptB = RoundPrompt(sessionB, rounds, round, lastA, scoreB, scoreA);
 
             var rawA = await _sessionCoordinator.SendExperimentPromptAsync(sessionA, promptA, () => BuildFullPayoffTableFor(isA: true));
             var rawB = await _sessionCoordinator.SendExperimentPromptAsync(sessionB, promptB, () => BuildFullPayoffTableFor(isA: false));
@@ -280,7 +319,7 @@ public abstract class RepeatedGameRunnerBase
             var moveA = ParseMove(rawA.Reply) ?? throw new InvalidOperationException($"moveA cannot be null. Raw: {rawA.Reply}");
             var moveB = ParseMove(rawB.Reply) ?? throw new InvalidOperationException($"moveB cannot be null. Raw: {rawB.Reply}");
 
-            var (payoffA, payoffB) = GetPayoff(moveA, moveB);
+            var (payoffA, payoffB) = Definition.GetPayoff(moveA, moveB);
             var (choiceA, choiceB) = Choice(moveA, moveB);
 
             scoreA += payoffA;
@@ -297,8 +336,32 @@ public abstract class RepeatedGameRunnerBase
                 rawA.Reply.Trim(),
                 rawB.Reply.Trim()));
 
-            DecisionLogger.InsertDecision(modelA, DecisionGameCode, title, round, choiceA, scoreA, moveA, agentPromptVersion, runId, uniqueName, "A");
-            DecisionLogger.InsertDecision(modelB, DecisionGameCode, title, round, choiceB, scoreB, moveB, agentPromptVersion, runId, uniqueName, "B");
+            decisions.Add(new ContextDecisionWrite(
+                modelA,
+                Definition.DecisionCode,
+                title,
+                round,
+                choiceA,
+                scoreA,
+                moveA,
+                agentPromptVersion,
+                runId,
+                uniqueName,
+                "A",
+                uniqueName));
+            decisions.Add(new ContextDecisionWrite(
+                modelB,
+                Definition.DecisionCode,
+                title,
+                round,
+                choiceB,
+                scoreB,
+                moveB,
+                agentPromptVersion,
+                runId,
+                uniqueName,
+                "B",
+                uniqueName));
 
             if (round % 10 == 0)
             {
@@ -310,8 +373,18 @@ public abstract class RepeatedGameRunnerBase
                     var explainA = await _sessionCoordinator.SendExperimentPromptAsync(sessionA, explainPromptA, () => BuildFullPayoffTableFor(isA: true));
                     var explainB = await _sessionCoordinator.SendExperimentPromptAsync(sessionB, explainPromptB, () => BuildFullPayoffTableFor(isA: false));
 
-                    ExplanationLogger.InsertRoundExplanation(modelA, DecisionGameCode, title, round, agentPromptVersion, runId, uniqueName, "round_10_block", explainA.Reply.Trim(), "A");
-                    ExplanationLogger.InsertRoundExplanation(modelB, DecisionGameCode, title, round, agentPromptVersion, runId, uniqueName, "round_10_block", explainB.Reply.Trim(), "B");
+                    explanations.Add(new ContextExplanationWrite(
+                        "A",
+                        round,
+                        "round_10_block",
+                        round,
+                        explainA.Reply.Trim()));
+                    explanations.Add(new ContextExplanationWrite(
+                        "B",
+                        round,
+                        "round_10_block",
+                        round,
+                        explainB.Reply.Trim()));
                 }
                 catch (Exception ex)
                 {
@@ -332,15 +405,26 @@ public abstract class RepeatedGameRunnerBase
             var postA = await _sessionCoordinator.SendExperimentPromptAsync(sessionA, postPromptA, () => BuildFullPayoffTableFor(isA: true));
             var postB = await _sessionCoordinator.SendExperimentPromptAsync(sessionB, postPromptB, () => BuildFullPayoffTableFor(isA: false));
 
-            ExplanationLogger.InsertPostGameExplanation(modelA, DecisionGameCode, title, agentPromptVersion, runId, uniqueName, "post_game", postA.Reply.Trim(), "A");
-            ExplanationLogger.InsertPostGameExplanation(modelB, DecisionGameCode, title, agentPromptVersion, runId, uniqueName, "post_game", postB.Reply.Trim(), "B");
+            explanations.Add(new ContextExplanationWrite(
+                "A",
+                rounds,
+                "post_game",
+                null,
+                postA.Reply.Trim()));
+            explanations.Add(new ContextExplanationWrite(
+                "B",
+                rounds,
+                "post_game",
+                null,
+                postB.Reply.Trim()));
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Warn] Failed to get post-game explanations: {ex.Message}");
         }
 
-        return new RepeatedGameResult(PrettyGameName, sessionA, sessionB, rounds, scoreA, scoreB, log);
+        ContextRunLogger.InsertContextRun(experimentRunId, decisions, explanations);
+        return new RepeatedGameResult(Definition.PrettyName, sessionA, sessionB, rounds, scoreA, scoreB, log);
     }
 
     private void DeleteSessionsQuietly(string sessionA, string sessionB)
@@ -364,20 +448,26 @@ public abstract class RepeatedGameRunnerBase
         }
     }
 
-    private string GetRoundPromptString(int round, string? lastOpponentMove, int myScore, int oppScore, string? version = null)
+    private string GetRoundPromptString(
+        int totalRounds,
+        int round,
+        string? lastOpponentMove,
+        int myScore,
+        int oppScore,
+        string? version = null)
     {
         var key = version ?? DefaultRoundPromptVersion;
         if (!RoundPromptCatalog.TryGetValue(key, out var prompt))
             prompt = RoundPromptCatalog[DefaultRoundPromptVersion];
-        return prompt(round, lastOpponentMove, myScore, oppScore);
+        return prompt(totalRounds, round, lastOpponentMove, myScore, oppScore);
     }
 
-    private string GetAgentSystemPromptString(string name, string? version = null)
+    private string GetAgentSystemPromptString(string name, int rounds, string? version = null)
     {
         var key = version ?? DefaultAgentSystemPromptVersion;
         if (!AgentPromptCatalog.TryGetValue(key, out var prompt))
             prompt = AgentPromptCatalog[DefaultAgentSystemPromptVersion];
-        return prompt.BuildPrompt(name);
+        return prompt.BuildPrompt(name, rounds);
     }
 
     private RepeatedGameAgentPrompt GetAgentSystemPrompt(string? version = null)
@@ -388,10 +478,22 @@ public abstract class RepeatedGameRunnerBase
         return prompt;
     }
 
-    private string RoundPrompt(string me, int round, string? lastOpponentMove, int myScore, int oppScore)
+    private string RoundPrompt(
+        string me,
+        int totalRounds,
+        int round,
+        string? lastOpponentMove,
+        int myScore,
+        int oppScore)
     {
         Console.WriteLine($"[Round {round}] Player: {me} | My Score: {myScore}, Opponent Score: {oppScore} | Last Opponent Move: {(lastOpponentMove ?? "BLIND")}");
-        return GetRoundPromptString(round, lastOpponentMove, myScore, oppScore, DefaultRoundPromptVersion);
+        return GetRoundPromptString(
+            totalRounds,
+            round,
+            lastOpponentMove,
+            myScore,
+            oppScore,
+            DefaultRoundPromptVersion);
     }
 
     private static string BuildPreviousChoiceExplanationPrompt(

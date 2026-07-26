@@ -62,11 +62,28 @@ public static class AdaptiveRunTextExporter
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, run_label, started_at, completed_at
-            FROM adaptive_runs
-            WHERE status = 'completed'
-              AND completed_at IS NOT NULL
-            ORDER BY completed_at DESC, id DESC
+            SELECT a.id,
+                   a.run_label,
+                   a.started_at,
+                   a.completed_at,
+                   CASE
+                       WHEN EXISTS (
+                           SELECT 1
+                           FROM decisions d
+                           WHERE d.experiment_run_id = a.id
+                       )
+                       OR EXISTS (
+                           SELECT 1
+                           FROM game_selection_decisions s
+                           WHERE s.experiment_run_id = a.id
+                       )
+                       THEN a.id
+                       ELSE NULL
+                   END AS experiment_run_id
+            FROM adaptive_runs a
+            WHERE a.status = 'completed'
+              AND a.completed_at IS NOT NULL
+            ORDER BY a.completed_at DESC, a.id DESC
             LIMIT 1;
             """;
 
@@ -78,7 +95,8 @@ public static class AdaptiveRunTextExporter
             Id: reader.GetInt64(0),
             RunLabel: reader.GetString(1),
             StartedAt: ParseTimestamp(reader.GetString(2)),
-            CompletedAt: ParseTimestamp(reader.GetString(3)));
+            CompletedAt: ParseTimestamp(reader.GetString(3)),
+            ExperimentRunId: reader.IsDBNull(4) ? null : reader.GetInt64(4));
     }
 
     private static AdaptiveRunRow? LoadLatestLegacyAdaptiveRun(SqliteConnection connection)
@@ -143,6 +161,19 @@ public static class AdaptiveRunTextExporter
                 adaptiveRun.LegacySelectionLastId.Value);
 
         using var command = connection.CreateCommand();
+        if (adaptiveRun.ExperimentRunId is not null)
+        {
+            command.CommandText = """
+                SELECT id, run_id, unique_name, model, context, prompt_version, player_role,
+                       selected_game, resolved_game, random_roll, raw_response, explanation, timestamp
+                FROM game_selection_decisions
+                WHERE experiment_run_id = $experiment_run_id
+                ORDER BY id;
+                """;
+            command.Parameters.AddWithValue("$experiment_run_id", adaptiveRun.ExperimentRunId.Value);
+            return ReadGameSelectionRows(command);
+        }
+
         command.CommandText = """
             SELECT id, run_id, unique_name, model, context, prompt_version, player_role,
                    selected_game, resolved_game, random_roll, raw_response, explanation, timestamp
@@ -154,27 +185,7 @@ public static class AdaptiveRunTextExporter
         command.Parameters.AddWithValue("$started_at", FormatSqliteTimestamp(adaptiveRun.StartedAt));
         command.Parameters.AddWithValue("$completed_at", FormatSqliteTimestamp(adaptiveRun.CompletedAt));
 
-        var rows = new List<GameSelectionRow>();
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            rows.Add(new GameSelectionRow(
-                Id: reader.GetInt64(0),
-                RunId: reader.GetInt32(1),
-                UniqueName: reader.GetString(2),
-                Model: reader.GetString(3),
-                Context: reader.GetString(4),
-                PromptVersion: reader.GetString(5),
-                PlayerRole: reader.GetString(6),
-                SelectedGame: reader.GetString(7),
-                ResolvedGame: reader.GetString(8),
-                RandomRoll: reader.IsDBNull(9) ? null : reader.GetInt32(9),
-                RawResponse: reader.GetString(10),
-                Explanation: reader.GetString(11),
-                Timestamp: reader.GetString(12)));
-        }
-
-        return rows;
+        return ReadGameSelectionRows(command);
     }
 
     private static List<GameSelectionRow> LoadLatestLegacySelectionSegment(
@@ -309,20 +320,35 @@ public static class AdaptiveRunTextExporter
                    d.timestamp
             FROM decision_explanations e
             INNER JOIN decisions d ON d.id = e.decision_id
-            WHERE e.timestamp >= $started_at
-              AND e.timestamp <= $completed_at
+            WHERE d.experiment_run_id = $experiment_run_id
             ORDER BY e.id;
             """;
-        command.Parameters.AddWithValue("$started_at", FormatSqliteTimestamp(adaptiveRun.StartedAt));
-        command.Parameters.AddWithValue("$completed_at", FormatSqliteTimestamp(adaptiveRun.CompletedAt));
-
-        if (!string.IsNullOrWhiteSpace(adaptiveRun.LegacyDecisionUniqueNamePrefix))
+        if (adaptiveRun.ExperimentRunId is not null)
+        {
+            command.Parameters.AddWithValue("$experiment_run_id", adaptiveRun.ExperimentRunId.Value);
+        }
+        else
         {
             command.CommandText = command.CommandText.Replace(
-                "WHERE e.timestamp >= $started_at",
-                "WHERE substr(d.unique_name, 1, length($decision_unique_name_prefix)) = $decision_unique_name_prefix\n              AND e.timestamp >= $started_at",
+                "WHERE d.experiment_run_id = $experiment_run_id",
+                """
+                WHERE e.timestamp >= $started_at
+                  AND e.timestamp <= $completed_at
+                """,
                 StringComparison.Ordinal);
-            command.Parameters.AddWithValue("$decision_unique_name_prefix", adaptiveRun.LegacyDecisionUniqueNamePrefix);
+            command.Parameters.AddWithValue("$started_at", FormatSqliteTimestamp(adaptiveRun.StartedAt));
+            command.Parameters.AddWithValue("$completed_at", FormatSqliteTimestamp(adaptiveRun.CompletedAt));
+
+            if (!string.IsNullOrWhiteSpace(adaptiveRun.LegacyDecisionUniqueNamePrefix))
+            {
+                command.CommandText = command.CommandText.Replace(
+                    "WHERE e.timestamp >= $started_at",
+                    "WHERE substr(d.unique_name, 1, length($decision_unique_name_prefix)) = $decision_unique_name_prefix\n                  AND e.timestamp >= $started_at",
+                    StringComparison.Ordinal);
+                command.Parameters.AddWithValue(
+                    "$decision_unique_name_prefix",
+                    adaptiveRun.LegacyDecisionUniqueNamePrefix);
+            }
         }
 
         var rows = new List<DecisionExplanationRow>();
@@ -355,6 +381,22 @@ public static class AdaptiveRunTextExporter
 
     private static List<GameDecisionRow> LoadAdaptiveDecisionRows(SqliteConnection connection, AdaptiveRunRow adaptiveRun)
     {
+        if (adaptiveRun.ExperimentRunId is not null)
+        {
+            using var scopedCommand = connection.CreateCommand();
+            scopedCommand.CommandText = """
+                SELECT id, run_id, unique_name, model, game, context, prompt_version,
+                       player_role, round, choice, payoff, raw_response, timestamp
+                FROM decisions
+                WHERE experiment_run_id = $experiment_run_id
+                ORDER BY run_id, context, prompt_version, game, unique_name, round, player_role, id;
+                """;
+            scopedCommand.Parameters.AddWithValue(
+                "$experiment_run_id",
+                adaptiveRun.ExperimentRunId.Value);
+            return ReadGameDecisionRows(scopedCommand);
+        }
+
         var uniqueNames = LoadAdaptiveDecisionUniqueNames(connection, adaptiveRun);
         if (uniqueNames.Count == 0)
             return new List<GameDecisionRow>();
@@ -376,6 +418,11 @@ public static class AdaptiveRunTextExporter
             ORDER BY run_id, context, prompt_version, game, unique_name, round, player_role, id;
             """;
 
+        return ReadGameDecisionRows(command);
+    }
+
+    private static List<GameDecisionRow> ReadGameDecisionRows(SqliteCommand command)
+    {
         var rows = new List<GameDecisionRow>();
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -671,7 +718,22 @@ public static class AdaptiveRunTextExporter
     private static string BuildPromptTemplateText()
     {
         var builder = new StringBuilder();
-        builder.AppendLine("Agent Explanation Prompt Templates");
+        builder.AppendLine("Agent Prompt Templates");
+        foreach (var definition in RepeatedGameDefinitions.All)
+        {
+            foreach (var (version, prompt) in RepeatedGamePromptCatalog
+                         .AgentPromptsFor(definition)
+                         .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                builder.AppendLine();
+                builder.AppendLine(
+                    $"{definition.DecisionCode} {prompt.Title} agent system prompt ({version})");
+                builder.AppendLine("```text");
+                builder.AppendLine(prompt.BuildPromptTemplate());
+                builder.AppendLine("```");
+            }
+        }
+
         builder.AppendLine();
         builder.AppendLine("Adaptive game-selection system prompt");
         builder.AppendLine("```text");
@@ -717,6 +779,7 @@ public static class AdaptiveRunTextExporter
         string RunLabel,
         DateTimeOffset StartedAt,
         DateTimeOffset CompletedAt,
+        long? ExperimentRunId = null,
         long? LegacySelectionFirstId = null,
         long? LegacySelectionLastId = null,
         string? LegacyDecisionUniqueNamePrefix = null,

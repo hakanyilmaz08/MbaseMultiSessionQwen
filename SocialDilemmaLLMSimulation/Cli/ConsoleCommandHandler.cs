@@ -233,8 +233,31 @@ public sealed class ConsoleCommandHandler
 
         for (var runId = firstRunId; runId <= lastRunId; runId++)
         {
+            var (modelA, modelB) = _coordinator.ResolveRunModels();
+            var plannedRunLabel = RepeatedGameRunnerBase.BuildRunLabel(modelA, modelB);
+            var experimentRunId = ExperimentRunLogger.Start(
+                $"standard-{runner.GameCode.ToLowerInvariant()}",
+                plannedRunLabel);
             var stopwatch = Stopwatch.StartNew();
-            var (allResults, actualRunLabel) = await runner.RunV1ToV5SequentialAsync(runLabel, rounds: 50, resetPrompts: false, clearSessions: true, runId: runId);
+            Dictionary<string, RepeatedGameResult> allResults;
+            string actualRunLabel;
+            try
+            {
+                (allResults, actualRunLabel) = await runner.RunV1ToV5SequentialAsync(
+                    runLabel,
+                    rounds: 50,
+                    resetPrompts: false,
+                    clearSessions: true,
+                    runId: runId,
+                    experimentRunId: experimentRunId);
+                ExperimentRunLogger.Complete(experimentRunId);
+            }
+            catch (Exception ex)
+            {
+                ExperimentRunLogger.Fail(experimentRunId, ex);
+                throw;
+            }
+
             foreach (var kvp in allResults)
             {
                 Console.WriteLine($"=== {kvp.Key} ===");
@@ -263,7 +286,9 @@ public sealed class ConsoleCommandHandler
         AdaptiveGameResult result;
         try
         {
-            result = await new AdaptiveGameRunner(_coordinator).RunAsync(rounds: 50);
+            result = await new AdaptiveGameRunner(_coordinator).RunAsync(
+                rounds: 50,
+                experimentRunId: adaptiveRunId);
             AdaptiveRunLogger.Complete(adaptiveRunId);
         }
         catch (Exception ex)

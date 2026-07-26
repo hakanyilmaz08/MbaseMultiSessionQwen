@@ -26,7 +26,8 @@ public static class ExperimentPaths
         => new SqliteConnectionStringBuilder
         {
             DataSource = DatabasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            ForeignKeys = true
         }.ToString();
 
     public static string EnsureResultsDirectory()
