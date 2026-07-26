@@ -218,19 +218,32 @@ public static class ModelSettings
             UsesCatalog: false);
     }
 
-    public static StartupModelSelection ResolveStartupSelection()
+    public static async Task<StartupModelSelection> ResolveStartupSelectionAsync(
+        CancellationToken cancellationToken = default)
     {
         var launchSelection = CreateLaunchSelection();
         Console.Write("Opt into external/config catalog selection instead of launch settings? [y/N]: ");
         var choice = (Console.ReadLine() ?? string.Empty).Trim();
         if (!IsYes(choice))
-            return launchSelection;
+        {
+            var preparedLaunchSelection = await PrepareSelectionForUseAsync(launchSelection, cancellationToken);
+            return preparedLaunchSelection
+                ?? throw new InvalidOperationException(
+                    $"Launch configuration '{launchSelection.Name}' did not pass endpoint validation.");
+        }
 
-        var selected = PromptForConfigurationSelection(includeLaunchSelection: false, launchSelection: null, allowCancel: false);
+        var selected = await PromptForConfigurationSelectionAsync(
+            includeLaunchSelection: false,
+            launchSelection: null,
+            allowCancel: false,
+            cancellationToken);
         if (selected is null)
         {
             Console.WriteLine($"No configurations found at '{ResolveCatalogPath()}'. Falling back to launch settings.");
-            return launchSelection;
+            var preparedLaunchSelection = await PrepareSelectionForUseAsync(launchSelection, cancellationToken);
+            return preparedLaunchSelection
+                ?? throw new InvalidOperationException(
+                    $"Launch configuration '{launchSelection.Name}' did not pass endpoint validation.");
         }
 
         return selected;
@@ -300,10 +313,11 @@ public static class ModelSettings
             profiles.Select(p => $"{p.Model} [{p.Provider}/{p.Source}]"));
     }
 
-    public static StartupModelSelection? PromptForConfigurationSelection(
+    public static async Task<StartupModelSelection?> PromptForConfigurationSelectionAsync(
         bool includeLaunchSelection,
         StartupModelSelection? launchSelection,
-        bool allowCancel)
+        bool allowCancel,
+        CancellationToken cancellationToken = default)
     {
         var selections = new List<StartupModelSelection>();
         if (includeLaunchSelection && launchSelection is not null)
@@ -331,7 +345,7 @@ public static class ModelSettings
 
             if (int.TryParse(selection, out var index) && index >= 1 && index <= selections.Count)
             {
-                var prepared = PrepareSelectionForUse(selections[index - 1]);
+                var prepared = await PrepareSelectionForUseAsync(selections[index - 1], cancellationToken);
                 if (prepared is not null)
                     return prepared;
                 continue;
@@ -341,7 +355,7 @@ public static class ModelSettings
                 string.Equals(c.Name, selection, StringComparison.OrdinalIgnoreCase));
             if (byName is not null)
             {
-                var prepared = PrepareSelectionForUse(byName);
+                var prepared = await PrepareSelectionForUseAsync(byName, cancellationToken);
                 if (prepared is not null)
                     return prepared;
                 continue;
@@ -351,34 +365,85 @@ public static class ModelSettings
         }
     }
 
-    private static StartupModelSelection? PrepareSelectionForUse(StartupModelSelection selection)
+    private static async Task<StartupModelSelection?> PrepareSelectionForUseAsync(
+        StartupModelSelection selection,
+        CancellationToken cancellationToken)
     {
-        if (!selection.Models.Any(m => m.RequiresApiKey))
-            return selection;
-
-        var resolvedKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var updatedModels = new List<ModelProfile>(selection.Models.Count);
-
-        foreach (var model in selection.Models)
+        Console.WriteLine($"Checking endpoints for '{selection.Name}'...");
+        var endpointResults = await ModelEndpointProbe.CheckSelectionAsync(selection, cancellationToken);
+        foreach (var endpoint in endpointResults)
         {
-            if (!model.RequiresApiKey)
+            if (endpoint.IsReachable)
             {
-                updatedModels.Add(model);
+                Console.WriteLine($"  reachable: {endpoint.BaseUrl} ({endpoint.Host}:{endpoint.Port})");
                 continue;
             }
 
-            if (!resolvedKeys.TryGetValue(model.CredentialKey, out var apiKey))
-            {
-                if (!TryResolveApiKey(model, out apiKey))
-                    return null;
-
-                resolvedKeys[model.CredentialKey] = apiKey;
-            }
-
-            updatedModels.Add(model with { ApiKey = apiKey });
+            Console.WriteLine($"  unreachable: {endpoint.BaseUrl} ({endpoint.Error})");
         }
 
-        return selection with { Models = updatedModels };
+        if (endpointResults.Any(result => !result.IsReachable))
+        {
+            Console.WriteLine($"Configuration '{selection.Name}' was not selected because one or more endpoints are unreachable.");
+            return null;
+        }
+
+        var preparedSelection = selection;
+        if (selection.Models.Any(m => m.RequiresApiKey))
+        {
+            var resolvedKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var updatedModels = new List<ModelProfile>(selection.Models.Count);
+
+            foreach (var model in selection.Models)
+            {
+                if (!model.RequiresApiKey)
+                {
+                    updatedModels.Add(model);
+                    continue;
+                }
+
+                if (!resolvedKeys.TryGetValue(model.CredentialKey, out var apiKey))
+                {
+                    if (!TryResolveApiKey(model, out apiKey))
+                        return null;
+
+                    resolvedKeys[model.CredentialKey] = apiKey;
+                }
+
+                updatedModels.Add(model with { ApiKey = apiKey });
+            }
+
+            preparedSelection = selection with { Models = updatedModels };
+        }
+
+        var modelListResults = await ModelEndpointProbe.CheckModelListsAsync(preparedSelection, cancellationToken);
+        foreach (var modelList in modelListResults)
+        {
+            if (!modelList.IsAvailable)
+            {
+                Console.WriteLine(
+                    $"  model list unavailable: {modelList.ModelsUrl} ({modelList.Error}); accepting the reachable port.");
+                continue;
+            }
+
+            if (modelList.MissingModels.Count == 0)
+            {
+                Console.WriteLine($"  models verified: {modelList.ModelsUrl}");
+                continue;
+            }
+
+            Console.WriteLine(
+                $"  models missing from {modelList.ModelsUrl}: {string.Join(", ", modelList.MissingModels)}");
+        }
+
+        if (modelListResults.Any(result => result.IsAvailable && result.MissingModels.Count > 0))
+        {
+            Console.WriteLine(
+                $"Configuration '{selection.Name}' was not selected because one or more models are not advertised by their endpoint.");
+            return null;
+        }
+
+        return preparedSelection;
     }
 
     private static bool TryResolveApiKey(ModelProfile model, out string apiKey)
@@ -593,7 +658,4 @@ public static class ModelSettings
     private static string NormalizeProvider(string provider)
         => string.IsNullOrWhiteSpace(provider) ? "openai-compat" : provider.Trim().ToLowerInvariant();
 }
-
-
-
 

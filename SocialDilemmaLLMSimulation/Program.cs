@@ -49,7 +49,7 @@ var jsonOptions = new JsonSerializerOptions
 };
 
 using var coordinator = new ExperimentSessionCoordinator(store, jsonOptions, mode);
-var createdFreshStartupSession = coordinator.Initialize();
+var createdFreshStartupSession = await coordinator.InitializeAsync();
 var commandHandler = new ConsoleCommandHandler(coordinator, HelpText);
 
 Console.WriteLine($"Active session: {coordinator.ActiveSession}");

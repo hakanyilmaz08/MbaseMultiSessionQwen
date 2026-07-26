@@ -32,9 +32,9 @@ public class SessionCoordinator : IDisposable
     public SessionManager Manager { get; private set; }
     public string? ActiveSession { get; private set; }
 
-    public bool Initialize()
+    public async Task<bool> InitializeAsync(CancellationToken cancellationToken = default)
     {
-        var startupSelection = ModelSettings.ResolveStartupSelection();
+        var startupSelection = await ModelSettings.ResolveStartupSelectionAsync(cancellationToken);
         ApplyModelSelection(startupSelection, "Startup selection");
 
         ActiveSession = ResolveStartupSessionId(startupSelection);
@@ -104,12 +104,14 @@ public class SessionCoordinator : IDisposable
         Manager.SetSystemPrompt(sid, systemPrompt);
     }
 
-    public StartupModelSelection? PromptForConfigurationSwitch()
+    public async Task<StartupModelSelection?> PromptForConfigurationSwitchAsync(
+        CancellationToken cancellationToken = default)
     {
-        var selected = ModelSettings.PromptForConfigurationSelection(
+        var selected = await ModelSettings.PromptForConfigurationSelectionAsync(
             includeLaunchSelection: true,
             launchSelection: _launchSelection,
-            allowCancel: true);
+            allowCancel: true,
+            cancellationToken);
 
         if (selected is null)
             return null;

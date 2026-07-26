@@ -116,7 +116,7 @@ public sealed class ConsoleCommandHandler
 
                 case "/cfgmodels":
                     Console.WriteLine($"Current configuration: {_coordinator.CurrentSelection.Name} [{_coordinator.CurrentSelection.Source}]");
-                    var selected = _coordinator.PromptForConfigurationSwitch();
+                    var selected = await _coordinator.PromptForConfigurationSwitchAsync();
                     Console.WriteLine(selected is null
                         ? "configuration unchanged."
                         : $"Created & switched to fresh session: {_coordinator.ActiveSession}");
