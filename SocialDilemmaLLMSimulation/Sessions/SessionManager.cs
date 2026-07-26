@@ -129,6 +129,7 @@ public class SessionManager
             return;
 
         _repo.Meta[sid] = updatedMeta;
+        _engine.Update(GetEngineSid(sid), model: updatedMeta.Model);
         Persist();
     }
 
@@ -145,6 +146,7 @@ public class SessionManager
 
         Ensure(sid);
         _repo.Meta[sid] = _repo.Meta[sid] with { Temperature = temperature, TemperatureOverridden = true };
+        _engine.Update(GetEngineSid(sid), temperature: temperature);
         Persist();
     }
 
@@ -155,6 +157,22 @@ public class SessionManager
 
         Ensure(sid);
         _repo.Meta[sid] = _repo.Meta[sid] with { TopP = topP, TopPOverridden = true };
+        _engine.Update(GetEngineSid(sid), topP: topP);
+        Persist();
+    }
+
+    public void SetSystemPrompt(string sid, string systemPrompt)
+    {
+        Ensure(sid);
+
+        var list = _repo.Sessions[sid];
+        var index = list.FindIndex(m => m.Role == "system");
+        if (index >= 0)
+            list[index] = list[index] with { Content = systemPrompt };
+        else
+            list.Insert(0, new Message("system", systemPrompt));
+
+        _engine.Update(GetEngineSid(sid), systemPrompt: systemPrompt);
         Persist();
     }
 
@@ -163,6 +181,7 @@ public class SessionManager
         if (!_repo.Sessions.ContainsKey(oldSid)) throw new Exception($"no such session: {oldSid}");
         if (_repo.Sessions.ContainsKey(newSid)) throw new Exception($"target exists: {newSid}");
 
+        DeleteEngineState(oldSid);
         _repo.Sessions[newSid] = _repo.Sessions[oldSid];
         _repo.Sessions.Remove(oldSid);
 
@@ -180,23 +199,55 @@ public class SessionManager
             };
         }
 
-        if (string.Equals(_mode, "server", StringComparison.OrdinalIgnoreCase)
-            && _repo.ConversationIds != null
-            && _repo.ConversationIds.TryGetValue(oldSid, out var conversationId))
-        {
-            _repo.ConversationIds.Remove(oldSid);
-            _repo.ConversationIds[newSid] = conversationId;
-        }
+        _repo.ConversationIds ??= new();
+        _repo.ConversationIds.Remove(oldSid);
+        _repo.ConversationIds[newSid] = newSid;
 
         Persist();
     }
 
     public void Delete(string sid)
     {
+        sid = Norm(sid);
+        DeleteEngineState(sid);
         _repo.Sessions.Remove(sid);
         _repo.Meta.Remove(sid);
         _repo.ConversationIds?.Remove(sid);
+        _sendLocks.TryRemove(sid, out _);
         Persist();
+    }
+
+    public void Reset(string sid, bool keepSystemPrompt)
+    {
+        sid = Norm(sid);
+        Ensure(sid);
+
+        var systemPrompt = keepSystemPrompt
+            ? _repo.Sessions[sid].FirstOrDefault(m => m.Role == "system")
+            : null;
+
+        DeleteEngineState(sid);
+        _repo.Sessions[sid] = systemPrompt is null
+            ? new List<Message>()
+            : new List<Message> { systemPrompt };
+        _repo.ConversationIds ??= new();
+        _repo.ConversationIds[sid] = sid;
+        Persist();
+        SyncRuntime(sid);
+    }
+
+    public void SyncRuntime(string sid)
+    {
+        Ensure(sid);
+
+        var meta = _repo.Meta[sid];
+        var systemPrompt = _repo.Sessions[sid].FirstOrDefault(m => m.Role == "system")?.Content;
+        _engine.CreateOrGet(
+            GetEngineSid(sid),
+            meta.Model,
+            systemPrompt,
+            meta.Temperature,
+            meta.TopP);
     }
 
     public void ForceSave() => Persist();
@@ -242,25 +293,28 @@ public class SessionManager
             if (!_repo.Sessions.TryGetValue(sid, out var session))
                 throw new InvalidOperationException($"No session for sid '{sid}'. Available: [{string.Join(", ", _repo.Sessions.Keys)}]");
 
-            session.Add(new Message("user", userText));
+            var pendingUserMessage = new Message("user", userText);
+            var pendingSession = new List<Message>(session.Count + 1);
+            pendingSession.AddRange(session);
+            pendingSession.Add(pendingUserMessage);
 
             var clearEveryDefault = _compactSend ? "10" : "0";
             var clearEvery = int.TryParse(Util.DetectEnv("CLEAR_KV_EVERY", clearEveryDefault), out var configuredValue)
                 ? Math.Max(0, configuredValue)
                 : 6;
-            var userTurns = CountUserTurns(sid);
+            var userTurns = pendingSession.Count(m => m.Role == "user");
             var renewNow = clearEvery > 0 && userTurns > 0 && (userTurns % clearEvery) == 0;
             if (renewNow)
                 RotateEngineSid(sid);
 
             var engineSid = GetEngineSid(sid);
             var normalizedSid = Norm(sid);
-            List<Message> payload = string.Equals(_mode, "server", StringComparison.OrdinalIgnoreCase)
-                ? new List<Message> { session[^1] }
-                : (_compactSend ? BuildCompactMessagesForSend(normalizedSid) : session);
+            List<Message> payload = _compactSend
+                ? BuildCompactMessagesForSend(pendingSession)
+                : pendingSession;
 
             var knownConvId = GetConversationId(sid);
-            LogContext(sid, session.Count, knownConvId);
+            LogContext(sid, pendingSession.Count, knownConvId);
 
             var modelName = GetModelForSession(sid);
             var systemPrompt = session.FirstOrDefault(m => m.Role == "system")?.Content;
@@ -282,6 +336,21 @@ public class SessionManager
                     sendText = $"{context}\n\n---\n{lastUser.Content}";
             }
 
+            var outboundMessages = payload
+                .Where(m => !string.Equals(m.Role, "system", StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(m.Content, systemPrompt, StringComparison.Ordinal))
+                .Select(m => new ChatMessage(m.Role, m.Content, DateTimeOffset.UtcNow))
+                .ToList();
+            var lastOutboundUserIndex = outboundMessages.FindLastIndex(
+                m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase));
+            if (lastOutboundUserIndex < 0)
+                throw new InvalidOperationException("No user message to send.");
+
+            outboundMessages[lastOutboundUserIndex] = outboundMessages[lastOutboundUserIndex] with
+            {
+                Content = sendText
+            };
+
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine($"\n-> MBASE send [sid={sid}] ({(renewNow ? "renew" : "normal")}):\n{sendText}\n");
             Console.ResetColor();
@@ -290,17 +359,23 @@ public class SessionManager
             try
             {
                 var stopwatch = Stopwatch.StartNew();
-                reply = await _engine.ChatAsync(engineSid, sendText);
+                var engineReply = await _engine.ChatAsync(engineSid, outboundMessages);
                 stopwatch.Stop();
+                reply = engineReply.Text;
 
-                var messages = _repo.Sessions[sid];
+                session.Add(pendingUserMessage);
+                session.Add(new Message("assistant", reply));
+
+                var messages = session;
                 Console.WriteLine($"[DEBUG] sid={sid}, msgCount={messages.Count}, totalChars={messages.Sum(m => (m.Content ?? string.Empty).Length)}");
                 Console.WriteLine(ToDebugString(messages));
 
                 if (ShouldLogPerf())
                 {
-                    var usage = TryGetUsageViaEngine(_engine, engineSid)
-                                ?? new UsageInfo(ApproxTokens(sendText), ApproxTokens(reply), ApproxTokens(sendText) + ApproxTokens(reply));
+                    var usage = new UsageInfo(
+                        engineReply.PromptTokens,
+                        engineReply.CompletionTokens,
+                        engineReply.PromptTokens + engineReply.CompletionTokens);
                     LogPerf(sid, stopwatch.ElapsedMilliseconds, sendText, usage);
                 }
             }
@@ -309,11 +384,9 @@ public class SessionManager
                 Console.Error.WriteLine("[Engine] " + ex.GetType().Name + ": " + ex.Message);
                 if (ex.InnerException is not null)
                     Console.Error.WriteLine("[Engine.Inner] " + ex.InnerException.GetType().Name + ": " + ex.InnerException.Message);
-                LogContext(sid, session.Count, knownConvId);
+                LogContext(sid, pendingSession.Count, knownConvId);
                 throw;
             }
-
-            session.Add(new Message("assistant", reply));
 
             if (string.Equals(_mode, "server", StringComparison.OrdinalIgnoreCase))
                 SetConvId(normalizedSid, engineSid);
@@ -402,9 +475,9 @@ public class SessionManager
             destination.Add(message);
     }
 
-    private List<Message> BuildCompactMessagesForSend(string sid)
+    private List<Message> BuildCompactMessagesForSend(IReadOnlyList<Message> history)
     {
-        if (!_repo.Sessions.TryGetValue(sid, out var history) || history.Count == 0)
+        if (history.Count == 0)
             return new List<Message>();
 
         var systems = history.Where(m => m.Role == "system").ToList();
@@ -427,9 +500,6 @@ public class SessionManager
 
         return compact;
     }
-
-    private static int ApproxTokens(string text)
-        => string.IsNullOrEmpty(text) ? 1 : Math.Max(1, text.Length / 4);
 
     private void Persist()
     {
@@ -457,53 +527,6 @@ public class SessionManager
 
     private sealed record UsageInfo(int? PromptTokens, int? CompletionTokens, int? TotalTokens);
 
-    private static UsageInfo? TryGetUsageViaEngine(object engine, string sid)
-    {
-        try
-        {
-            var type = engine.GetType();
-            var method = type.GetMethod("GetLastUsage", new[] { typeof(string) });
-            object? result = method?.Invoke(engine, new object?[] { sid });
-
-            if (result is null)
-            {
-                var property = type.GetProperty("LastUsage");
-                var lastUsage = property?.GetValue(engine);
-                if (lastUsage is System.Collections.IDictionary dictionary && dictionary.Contains(sid))
-                    result = dictionary[sid];
-            }
-
-            if (result is null)
-                return null;
-
-            var resultType = result.GetType();
-            var promptTokens = GetIntProp(resultType, result, "PromptTokens") ?? GetIntProp(resultType, result, "prompt_tokens");
-            var completionTokens = GetIntProp(resultType, result, "CompletionTokens") ?? GetIntProp(resultType, result, "completion_tokens");
-            var totalTokens = GetIntProp(resultType, result, "TotalTokens") ?? GetIntProp(resultType, result, "total_tokens");
-            return new UsageInfo(promptTokens, completionTokens, totalTokens);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static int? GetIntProp(Type resultType, object instance, string name)
-    {
-        var property = resultType.GetProperty(name);
-        if (property == null)
-            return null;
-
-        var value = property.GetValue(instance);
-        if (value is int intValue)
-            return intValue;
-        if (value is long longValue && longValue <= int.MaxValue)
-            return (int)longValue;
-        if (value is string stringValue && int.TryParse(stringValue, out var parsed))
-            return parsed;
-        return null;
-    }
-
     private void LogPerf(string sid, long elapsedMs, string userPayload, UsageInfo usage)
     {
         var payloadBytes = Encoding.UTF8.GetByteCount(userPayload);
@@ -517,9 +540,6 @@ public class SessionManager
             $"user_payload_bytes={payloadBytes}");
     }
 
-    private int CountUserTurns(string sid)
-        => _repo.Sessions.TryGetValue(sid, out var session) ? session.Count(m => m.Role == "user") : 0;
-
     private string GetEngineSid(string sid)
     {
         _repo.ConversationIds ??= new();
@@ -530,10 +550,24 @@ public class SessionManager
 
     private void RotateEngineSid(string sid)
     {
+        var previousEngineSid = GetEngineSid(sid);
+        _engine.Delete(previousEngineSid);
         _repo.ConversationIds ??= new();
         _repo.ConversationIds[sid] = $"{sid}:{DateTime.UtcNow.Ticks}";
         Console.Error.WriteLine($"[KV] rotated engine session for sid={sid} -> {_repo.ConversationIds[sid]}");
         Persist();
+    }
+
+    private void DeleteEngineState(string sid)
+    {
+        if (_repo.ConversationIds is not null
+            && _repo.ConversationIds.TryGetValue(sid, out var engineSid)
+            && !string.IsNullOrWhiteSpace(engineSid))
+        {
+            _engine.Delete(engineSid);
+        }
+
+        _engine.DeleteSessionFamily(sid);
     }
 
     private static string Norm(string sid)
@@ -573,6 +607,3 @@ public class SessionManager
         return result;
     }
 }
-
-
-

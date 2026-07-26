@@ -4,6 +4,11 @@ using SocialDilemmaLLMSimulation.Domain;
 using SocialDilemmaLLMSimulation.Services;
 using System.Collections.Concurrent;
 
+public sealed record ChatEngineReply(
+    string Text,
+    int PromptTokens,
+    int CompletionTokens);
+
 public sealed class ChatSessionEngine
 {
     private readonly ISessionStore _store;
@@ -30,6 +35,7 @@ public sealed class ChatSessionEngine
         }
         else
         {
+            s.Model = model;
             if (systemPrompt is not null) s.SystemPrompt = systemPrompt;
             if (temperature is not null) s.Temperature = temperature.Value;
             if (topP is not null) s.TopP = topP.Value;
@@ -38,9 +44,12 @@ public sealed class ChatSessionEngine
         return s;
     }
 
-    public async Task<string> ChatAsync(string sessionId, string userInput,
-                                        int maxTokens = 80000, int reserveForOutput = 1000,
-                                        CancellationToken ct = default)
+    public async Task<ChatEngineReply> ChatAsync(
+        string sessionId,
+        IReadOnlyList<ChatMessage> messages,
+        int maxTokens = 80000,
+        int reserveForOutput = 1000,
+        CancellationToken ct = default)
     {
         if (!_store.TryGet(sessionId, out var s))
             throw new KeyNotFoundException($"Session '{sessionId}' not found.");
@@ -49,9 +58,7 @@ public sealed class ChatSessionEngine
         await gate.WaitAsync(ct);
         try
         {
-            _store.Append(sessionId, new ChatMessage("user", userInput, DateTimeOffset.UtcNow));
-
-            var window = PromptWindowBuilder.Build(s, maxTokens, reserveForOutput);
+            var window = PromptWindowBuilder.Build(messages, maxTokens, reserveForOutput);
 
             var (text, usage, kv) = await _broker.CompleteAsync(
                 model: s.Model,
@@ -66,16 +73,22 @@ public sealed class ChatSessionEngine
             s.KvCacheHandle = kv ?? s.KvCacheHandle;
             s.PromptTokens += usage.PromptTokens;
             s.CompletionTokens += usage.CompletionTokens;
+            s.UpdatedAt = DateTimeOffset.UtcNow;
 
-            _store.Append(sessionId, new ChatMessage("assistant", text, DateTimeOffset.UtcNow));
-            return text;
+            return new ChatEngineReply(text, usage.PromptTokens, usage.CompletionTokens);
         }
         finally { gate.Release(); }
     }
 
-    public bool Update(string sessionId, string? systemPrompt = null, double? temperature = null, double? topP = null)
+    public bool Update(
+        string sessionId,
+        string? model = null,
+        string? systemPrompt = null,
+        double? temperature = null,
+        double? topP = null)
     {
         if (!_store.TryGet(sessionId, out var s)) return false;
+        if (model is not null) s.Model = model;
         if (systemPrompt is not null) s.SystemPrompt = systemPrompt;
         if (temperature is not null) s.Temperature = temperature.Value;
         if (topP is not null) s.TopP = topP.Value;
@@ -83,14 +96,24 @@ public sealed class ChatSessionEngine
         return true;
     }
 
-    public bool Reset(string sessionId, bool keepSystemPrompt = true)
+    public bool Delete(string sessionId)
     {
-        if (!_store.TryGet(sessionId, out var s)) return false;
-        var sys = s.SystemPrompt;
-        s.History.Clear();
-        if (keepSystemPrompt) s.SystemPrompt = sys;
-        s.UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
+        _locks.TryRemove(sessionId, out _);
+        return _store.Delete(sessionId);
+    }
+
+    public int DeleteSessionFamily(string logicalSessionId)
+    {
+        var prefix = logicalSessionId + ":";
+        var sessionIds = _store.List(int.MaxValue)
+            .Select(s => s.SessionId)
+            .Where(id => string.Equals(id, logicalSessionId, StringComparison.Ordinal)
+                || id.StartsWith(prefix, StringComparison.Ordinal))
+            .ToList();
+
+        foreach (var sessionId in sessionIds)
+            Delete(sessionId);
+
+        return sessionIds.Count;
     }
 }
-

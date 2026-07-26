@@ -22,14 +22,17 @@ public sealed class InProcessSessionTransport : ISessionTransport
 
         //_engine.CreateOrGet(sid, _model); // idempotent
 
-        var lastUser = messagesOrTail.LastOrDefault(m => m.Role == "user")
-            ?? throw new InvalidOperationException("No user message to send.");
+        var messages = messagesOrTail
+            .Where(m => m.Role != "system")
+            .Select(m => new ChatMessage(m.Role, m.Content, DateTimeOffset.UtcNow))
+            .ToList();
+        if (!messages.Any(m => m.Role == "user"))
+            throw new InvalidOperationException("No user message to send.");
 
-        var text = await _engine.ChatAsync(sid, lastUser.Content);
-        return (text, sid);
+        var reply = await _engine.ChatAsync(sid, messages);
+        return (reply.Text, sid);
     }
 
 }
-
 
 

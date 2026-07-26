@@ -1,6 +1,5 @@
 using SocialDilemmaLLMSimulation.Infrastructure;
 using SocialDilemmaLLMSimulation.Brokers;
-using SocialDilemmaLLMSimulation.Domain;
 using System.Text.Json;
 
 namespace SocialDilemmaLLMSimulation;
@@ -75,7 +74,6 @@ public class SessionCoordinator : IDisposable
 
     public void DeleteSession(string sid)
     {
-        _engine.Reset(sid, keepSystemPrompt: false);
         Manager.Delete(sid);
 
         if (ActiveSession == sid)
@@ -92,29 +90,18 @@ public class SessionCoordinator : IDisposable
     {
         var sid = RequireActiveSession();
         Manager.SetTemp(sid, temperature);
-        _engine.Update(sid, temperature: temperature);
     }
 
     public void SetTopP(double topP)
     {
         var sid = RequireActiveSession();
         Manager.SetTopP(sid, topP);
-        _engine.Update(sid, topP: topP);
     }
 
     public void SetSystemPrompt(string systemPrompt)
     {
         var sid = RequireActiveSession();
-        _engine.Update(sid, systemPrompt: systemPrompt);
-
-        var list = _repo.Sessions[sid];
-        var idx = list.FindIndex(m => m.Role == "system");
-        if (idx >= 0)
-            list[idx] = list[idx] with { Content = systemPrompt };
-        else
-            list.Insert(0, new Message("system", systemPrompt));
-
-        Manager.ForceSave();
+        Manager.SetSystemPrompt(sid, systemPrompt);
     }
 
     public StartupModelSelection? PromptForConfigurationSwitch()
@@ -152,7 +139,7 @@ public class SessionCoordinator : IDisposable
     public void ResetActiveSession(bool keepSystemPrompt)
     {
         var sid = RequireActiveSession();
-        _engine.Reset(sid, keepSystemPrompt);
+        Manager.Reset(sid, keepSystemPrompt);
     }
 
     public string EnsureDefaultActiveSession()
@@ -246,15 +233,7 @@ public class SessionCoordinator : IDisposable
 
     private void SyncSessionWithEngine(string sid)
     {
-        Manager.Ensure(sid);
-
-        var meta = Manager.GetMeta(sid);
-        string? sys = null;
-        if (_repo.Sessions.TryGetValue(sid, out var list))
-            sys = list.FirstOrDefault(m => m.Role == "system")?.Content;
-
-        var model = Manager.GetModelForSession(sid);
-        _engine.CreateOrGet(sid, model, systemPrompt: sys, temperature: meta.Temperature, topP: meta.TopP);
+        Manager.SyncRuntime(sid);
     }
 
     private string RequireActiveSession()
@@ -265,6 +244,4 @@ public class SessionCoordinator : IDisposable
         _brokerProvider?.Dispose();
     }
 }
-
-
 

@@ -78,9 +78,10 @@ public sealed class AdaptiveGameRunner
     {
         var (modelA, modelB) = _sessionCoordinator.ResolveRunModels();
         var runLabel = RepeatedGameRunnerBase.BuildRunLabel(modelA, modelB);
-        var sessionPrefix = string.IsNullOrWhiteSpace(baseSessionPrefix)
+        var stableSessionPrefix = string.IsNullOrWhiteSpace(baseSessionPrefix)
             ? runLabel
             : $"{baseSessionPrefix}__{runLabel}";
+        var sessionPrefix = $"{stableSessionPrefix}__exec{RepeatedGameRunnerBase.CreateExecutionSessionTag()}";
 
         var versions = _pdRunner.GetAgentPromptVersions()
             .Intersect(_sdRunner.GetAgentPromptVersions(), StringComparer.OrdinalIgnoreCase)

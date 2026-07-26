@@ -146,6 +146,7 @@ public abstract class RepeatedGameRunnerBase
         var effectivePrefix = string.IsNullOrWhiteSpace(baseSessionPrefix)
             ? runModelLabel
             : $"{baseSessionPrefix}__{runModelLabel}";
+        var executionTag = CreateExecutionSessionTag();
 
         var sw = Stopwatch.StartNew();
 
@@ -158,7 +159,7 @@ public abstract class RepeatedGameRunnerBase
                 continue;
             }
 
-            var sessionPrefix = $"{effectivePrefix}_run{runId}";
+            var sessionPrefix = $"{effectivePrefix}_{DecisionGameCode}_exec{executionTag}_run{runId}";
             var sessionA = $"{sessionPrefix}_{version}_A";
             var sessionB = $"{sessionPrefix}_{version}_B";
 
@@ -166,30 +167,25 @@ public abstract class RepeatedGameRunnerBase
             Console.WriteLine($"===== Running {agentPrompt.Title} ({version}) with {runModelLabel} [run {runId}] =====");
             Console.WriteLine($"Session prefix: {sessionPrefix} (A={sessionA}, B={sessionB})");
 
-            var result = await PlayCoreAsync(
-                sessionA,
-                sessionB,
-                rounds,
-                resetPrompts,
-                version,
-                runId,
-                modelA,
-                modelB);
-
-            results[version] = result;
-            Console.WriteLine(result.Pretty());
-
-            if (clearSessions)
+            try
             {
-                try
-                {
-                    _sessionCoordinator.DeleteExperimentSession(sessionA);
-                    _sessionCoordinator.DeleteExperimentSession(sessionB);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Warn] Failed to clear {sessionA}/{sessionB}: {ex.Message}");
-                }
+                var result = await PlayCoreAsync(
+                    sessionA,
+                    sessionB,
+                    rounds,
+                    resetPrompts,
+                    version,
+                    runId,
+                    modelA,
+                    modelB);
+
+                results[version] = result;
+                Console.WriteLine(result.Pretty());
+            }
+            finally
+            {
+                if (clearSessions)
+                    DeleteSessionsQuietly(sessionA, sessionB);
             }
         }
 
@@ -206,6 +202,9 @@ public abstract class RepeatedGameRunnerBase
             ? modelA
             : $"{modelA}_vs_{modelB}";
     }
+
+    internal static string CreateExecutionSessionTag()
+        => Guid.NewGuid().ToString("N")[..12];
 
     private async Task<RepeatedGameResult> PlayCoreAsync(
         string sessionA,
@@ -250,8 +249,8 @@ public abstract class RepeatedGameRunnerBase
             return sb.ToString();
         }
 
-        _sessionCoordinator.PrepareExperimentSession(sessionA, modelA, GetAgentSystemPromptString(sessionA, agentPromptVersion), resetPrompts);
-        _sessionCoordinator.PrepareExperimentSession(sessionB, modelB, GetAgentSystemPromptString(sessionB, agentPromptVersion), resetPrompts);
+        _sessionCoordinator.PrepareExperimentSession(sessionA, modelA, GetAgentSystemPromptString("Player A", agentPromptVersion), resetPrompts);
+        _sessionCoordinator.PrepareExperimentSession(sessionB, modelB, GetAgentSystemPromptString("Player B", agentPromptVersion), resetPrompts);
 
         string? lastA = null;
         string? lastB = null;
@@ -342,6 +341,27 @@ public abstract class RepeatedGameRunnerBase
         }
 
         return new RepeatedGameResult(PrettyGameName, sessionA, sessionB, rounds, scoreA, scoreB, log);
+    }
+
+    private void DeleteSessionsQuietly(string sessionA, string sessionB)
+    {
+        try
+        {
+            _sessionCoordinator.DeleteExperimentSession(sessionA);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Warn] Failed to clear {sessionA}: {ex.Message}");
+        }
+
+        try
+        {
+            _sessionCoordinator.DeleteExperimentSession(sessionB);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Warn] Failed to clear {sessionB}: {ex.Message}");
+        }
     }
 
     private string GetRoundPromptString(int round, string? lastOpponentMove, int myScore, int oppScore, string? version = null)

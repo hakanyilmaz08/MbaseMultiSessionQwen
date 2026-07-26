@@ -23,14 +23,4 @@ public sealed class InMemorySessionStore : ISessionStore
         => _map.Values.Where(s => model is null || s.Model == model)
                       .OrderByDescending(s => s.UpdatedAt)
                       .Take(take);
-
-    public SessionState Append(string sessionId, ChatMessage msg)
-    {
-        if (!_map.TryGetValue(sessionId, out var s))
-            throw new KeyNotFoundException($"Session '{sessionId}' not found.");
-        s.History.Add(msg);
-        s.UpdatedAt = DateTimeOffset.UtcNow;
-        return s;
-    }
 }
-

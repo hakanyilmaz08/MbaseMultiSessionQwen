@@ -4,15 +4,18 @@ namespace SocialDilemmaLLMSimulation.Services;
 
 public static class PromptWindowBuilder
 {
-    public static IReadOnlyList<ChatMessage> Build(SessionState s, int maxTokens = 80_000, int reserveForOutput = 1_000)
+    public static IReadOnlyList<ChatMessage> Build(
+        IReadOnlyList<ChatMessage> history,
+        int maxTokens = 80_000,
+        int reserveForOutput = 1_000)
     {
         var kept = new List<ChatMessage>();
         int budget = Math.Max(1, maxTokens - reserveForOutput);
 
         // keep newest first, then reverse
-        for (int i = s.History.Count - 1; i >= 0; i--)
+        for (int i = history.Count - 1; i >= 0; i--)
         {
-            var m = s.History[i];
+            var m = history[i];
             int t = EstimateTokens(m);
             if (t > budget) break;
             kept.Add(m);
@@ -21,17 +24,15 @@ public static class PromptWindowBuilder
         kept.Reverse();
 
         // If we dropped older messages, prepend a server summary
-        if (kept.Count < s.History.Count)
+        if (kept.Count < history.Count)
         {
-            var summary = Summarize(s.History.Take(s.History.Count - kept.Count));
+            var summary = Summarize(history.Take(history.Count - kept.Count));
             kept.Insert(0,
                 new ChatMessage(
                     "system",
                     $"Conversation so far (server summary): {summary}",
                     DateTimeOffset.UtcNow));
         }
-
-       
 
         return kept;
     }
@@ -48,4 +49,3 @@ public static class PromptWindowBuilder
     private static string Trunc(string s, int n)
         => s.Length <= n ? s : s[..n] + "…";
 }
-
