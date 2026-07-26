@@ -12,4 +12,5 @@ public record SessionMeta(
     double TopP,
     string Model = "",
     bool TemperatureOverridden = false,
-    bool TopPOverridden = false);
+    bool TopPOverridden = false,
+    string ProfileKey = "");

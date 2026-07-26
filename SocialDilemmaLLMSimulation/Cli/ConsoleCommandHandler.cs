@@ -233,8 +233,8 @@ public sealed class ConsoleCommandHandler
 
         for (var runId = firstRunId; runId <= lastRunId; runId++)
         {
-            var (modelA, modelB) = _coordinator.ResolveRunModels();
-            var plannedRunLabel = RepeatedGameRunnerBase.BuildRunLabel(modelA, modelB);
+            var (profileA, profileB) = _coordinator.ResolveRunModels();
+            var plannedRunLabel = RepeatedGameRunnerBase.BuildRunLabel(profileA, profileB);
             var experimentRunId = ExperimentRunLogger.Start(
                 $"standard-{runner.GameCode.ToLowerInvariant()}",
                 plannedRunLabel);
@@ -279,8 +279,8 @@ public sealed class ConsoleCommandHandler
     private async Task ExecuteAdaptiveRunnerAsync()
     {
         var resultsDirectory = ExperimentPaths.EnsureResultsDirectory();
-        var (modelA, modelB) = _coordinator.ResolveRunModels();
-        var plannedRunLabel = RepeatedGameRunnerBase.BuildRunLabel(modelA, modelB);
+        var (profileA, profileB) = _coordinator.ResolveRunModels();
+        var plannedRunLabel = RepeatedGameRunnerBase.BuildRunLabel(profileA, profileB);
         var adaptiveRunId = AdaptiveRunLogger.Start(plannedRunLabel);
         var stopwatch = Stopwatch.StartNew();
         AdaptiveGameResult result;
@@ -322,7 +322,7 @@ public sealed class ConsoleCommandHandler
 
     private string BuildCrossModelLabel()
     {
-        return _coordinator.Models.Select(m => m.Model).Distinct().Skip(1).Any()
+        return _coordinator.Models.Select(m => m.Key).Distinct(StringComparer.OrdinalIgnoreCase).Skip(1).Any()
             ? "cross"
             : (string.IsNullOrWhiteSpace(_coordinator.Models.FirstOrDefault()?.Model)
                 ? "noname"

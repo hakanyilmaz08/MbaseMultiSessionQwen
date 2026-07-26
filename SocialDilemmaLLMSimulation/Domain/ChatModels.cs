@@ -5,6 +5,7 @@ public sealed record ChatMessage(string Role, string Content, DateTimeOffset Ts)
 public sealed class SessionState
 {
     public required string SessionId { get; init; }               // immutable id
+    public required string ProfileKey { get; set; }
     public required string Model { get; set; }                     // e.g., "Qwen2.5-7B-Instruct"
     public string? SystemPrompt { get; set; }                      // mutable
     public required double Temperature { get; set; }

@@ -13,7 +13,8 @@ public sealed record ContextDecisionWrite(
     int RunId,
     string UniqueName,
     string PlayerRole,
-    string? PairId = null);
+    string? PairId = null,
+    string? ModelProfileKey = null);
 
 public sealed record ContextExplanationWrite(
     string PlayerRole,
@@ -81,15 +82,18 @@ public static class ContextRunLogger
         command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO decisions
-                (experiment_run_id, run_id, model, game, context, round, choice, payoff,
+                (experiment_run_id, run_id, model_profile_key, model, game, context, round, choice, payoff,
                  raw_response, prompt_version, player_role, pair_id, unique_name)
             VALUES
-                ($experiment_run_id, $run_id, $model, $game, $context, $round, $choice, $payoff,
+                ($experiment_run_id, $run_id, $model_profile_key, $model, $game, $context, $round, $choice, $payoff,
                  $raw_response, $prompt_version, $player_role, $pair_id, $unique_name)
             RETURNING id;
             """;
         command.Parameters.AddWithValue("$experiment_run_id", (object?)experimentRunId ?? DBNull.Value);
         command.Parameters.AddWithValue("$run_id", decision.RunId);
+        command.Parameters.AddWithValue(
+            "$model_profile_key",
+            (object?)decision.ModelProfileKey ?? DBNull.Value);
         command.Parameters.AddWithValue("$model", decision.Model);
         command.Parameters.AddWithValue("$game", decision.Game);
         command.Parameters.AddWithValue("$context", decision.Context);

@@ -18,14 +18,20 @@ public sealed class ChatSessionEngine
     public ChatSessionEngine(ISessionStore store, IModelBroker broker)
     { _store = store; _broker = broker; }
 
-    public SessionState CreateOrGet(string sessionId, string model, string? systemPrompt = null,
-                                    double? temperature = null, double? topP = null)
+    public SessionState CreateOrGet(
+        string sessionId,
+        string profileKey,
+        string model,
+        string? systemPrompt = null,
+        double? temperature = null,
+        double? topP = null)
     {
         if (!_store.TryGet(sessionId, out var s))
         {
             s = new SessionState
             {
                 SessionId = sessionId,
+                ProfileKey = profileKey,
                 Model = model,
                 SystemPrompt = systemPrompt,
                 Temperature = temperature ?? throw new InvalidOperationException($"Temperature must be configured for session '{sessionId}'."),
@@ -35,6 +41,7 @@ public sealed class ChatSessionEngine
         }
         else
         {
+            s.ProfileKey = profileKey;
             s.Model = model;
             if (systemPrompt is not null) s.SystemPrompt = systemPrompt;
             if (temperature is not null) s.Temperature = temperature.Value;
@@ -61,7 +68,7 @@ public sealed class ChatSessionEngine
             var window = PromptWindowBuilder.Build(messages, maxTokens, reserveForOutput);
 
             var (text, usage, kv) = await _broker.CompleteAsync(
-                model: s.Model,
+                profileKey: s.ProfileKey,
                 system: s.SystemPrompt,
                 messages: window,
                 temperature: s.Temperature,
@@ -82,12 +89,14 @@ public sealed class ChatSessionEngine
 
     public bool Update(
         string sessionId,
+        string? profileKey = null,
         string? model = null,
         string? systemPrompt = null,
         double? temperature = null,
         double? topP = null)
     {
         if (!_store.TryGet(sessionId, out var s)) return false;
+        if (profileKey is not null) s.ProfileKey = profileKey;
         if (model is not null) s.Model = model;
         if (systemPrompt is not null) s.SystemPrompt = systemPrompt;
         if (temperature is not null) s.Temperature = temperature.Value;

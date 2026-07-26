@@ -50,14 +50,16 @@ public sealed class RepeatedGameRunnerLifecycleTests
         public List<string> PreparedSessions { get; } = new();
         public List<string> DeletedSessions { get; } = new();
 
-        public (string ModelA, string ModelB) ResolveRunModels(
-            string? preferredModelA = null,
-            string? preferredModelB = null)
-            => (preferredModelA ?? "model-a", preferredModelB ?? "model-b");
+        public (ModelProfile ProfileA, ModelProfile ProfileB) ResolveRunModels(
+            string? preferredProfileKeyA = null,
+            string? preferredProfileKeyB = null)
+            => (
+                Profile(preferredProfileKeyA ?? "a", "model-a"),
+                Profile(preferredProfileKeyB ?? "b", "model-b"));
 
         public void PrepareExperimentSession(
             string sid,
-            string model,
+            ModelProfile profile,
             string systemPrompt,
             bool resetIfExists)
             => PreparedSessions.Add(sid);
@@ -71,5 +73,14 @@ public sealed class RepeatedGameRunnerLifecycleTests
 
         public void DeleteExperimentSession(string sid)
             => DeletedSessions.Add(sid);
+
+        private static ModelProfile Profile(string key, string model)
+            => new()
+            {
+                Key = key,
+                Model = model,
+                Temperature = 0.7,
+                TopP = 0.95
+            };
     }
 }

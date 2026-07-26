@@ -131,7 +131,7 @@ public class SessionCoordinator : IDisposable
     {
         var sid = RequireActiveSession();
         var meta = Manager.GetMeta(sid);
-        return $"session={sid} cfg={CurrentSelection.Name} source={CurrentSelection.Source} model={Manager.GetModelForSession(sid)} temp={meta.Temperature} top_p={meta.TopP} convId={Manager.GetConversationId(sid)}";
+        return $"session={sid} cfg={CurrentSelection.Name} source={CurrentSelection.Source} profile={meta.ProfileKey} model={meta.Model} temp={meta.Temperature} top_p={meta.TopP} convId={Manager.GetConversationId(sid)}";
     }
 
     public void Save() => Manager.ForceSave();
@@ -170,7 +170,14 @@ public class SessionCoordinator : IDisposable
         var bootstrap = RoutedModelBrokerSetup.Build(Models);
         _brokerProvider = bootstrap.Provider;
         _engine = new ChatSessionEngine(new InMemorySessionStore(), bootstrap.Broker);
-        Manager = new SessionManager(_repo, _engine, _storePath, _jsonOptions, _mode, model, Models);
+        Manager = new SessionManager(
+            _repo,
+            _engine,
+            _storePath,
+            _jsonOptions,
+            _mode,
+            primaryModel.Key,
+            Models);
 
         Console.WriteLine($"{banner}: {(selection.UsesCatalog ? "catalog" : "launch settings")} name={selection.Name} source={selection.Source}");
         Console.WriteLine($"Connecting to {baseUrl} model={model} mode={_mode}");
@@ -225,7 +232,18 @@ public class SessionCoordinator : IDisposable
         if (!_repo.Sessions.ContainsKey(sid))
             return false;
 
-        if (!_repo.Meta.TryGetValue(sid, out var meta) || string.IsNullOrWhiteSpace(meta.Model))
+        if (!_repo.Meta.TryGetValue(sid, out var meta))
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(meta.ProfileKey))
+        {
+            return Models.Any(model => string.Equals(
+                model.Key,
+                meta.ProfileKey,
+                StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (string.IsNullOrWhiteSpace(meta.Model))
             return true;
 
         return Models.Any(m => string.Equals(m.Model, meta.Model, StringComparison.OrdinalIgnoreCase));
@@ -244,4 +262,3 @@ public class SessionCoordinator : IDisposable
         _brokerProvider?.Dispose();
     }
 }
-

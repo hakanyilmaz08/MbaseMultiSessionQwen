@@ -12,7 +12,8 @@ public sealed record GameSelectionWrite(
     string ResolvedGame,
     int? RandomRoll,
     string RawResponse,
-    string Explanation);
+    string Explanation,
+    string? ModelProfileKey = null);
 
 public static class GameSelectionLogger
 {
@@ -51,15 +52,18 @@ public static class GameSelectionLogger
         command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO game_selection_decisions
-                (experiment_run_id, run_id, unique_name, model, context, prompt_version,
+                (experiment_run_id, run_id, unique_name, model_profile_key, model, context, prompt_version,
                  player_role, selected_game, resolved_game, random_roll, raw_response, explanation)
             VALUES
-                ($experiment_run_id, $run_id, $unique_name, $model, $context, $prompt_version,
+                ($experiment_run_id, $run_id, $unique_name, $model_profile_key, $model, $context, $prompt_version,
                  $player_role, $selected_game, $resolved_game, $random_roll, $raw_response, $explanation);
             """;
         command.Parameters.AddWithValue("$experiment_run_id", (object?)experimentRunId ?? DBNull.Value);
         command.Parameters.AddWithValue("$run_id", selection.RunId);
         command.Parameters.AddWithValue("$unique_name", selection.UniqueName);
+        command.Parameters.AddWithValue(
+            "$model_profile_key",
+            (object?)selection.ModelProfileKey ?? DBNull.Value);
         command.Parameters.AddWithValue("$model", selection.Model);
         command.Parameters.AddWithValue("$context", selection.Context);
         command.Parameters.AddWithValue("$prompt_version", selection.PromptVersion);

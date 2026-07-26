@@ -13,23 +13,22 @@ public sealed record AdaptiveRunTextExportResult(
 
 public static class AdaptiveRunTextExporter
 {
-    private const int FirstAdaptiveRunId = 3;
-    private const string AdaptiveSelectionMarker = "__adaptive_selection__run";
-
     public static AdaptiveRunTextExportResult ExportLastPlayAdaptive()
     {
         using var connection = new SqliteConnection(ExperimentPaths.DatabaseConnectionString);
         connection.Open();
 
-        var adaptiveRun = LoadLastCompletedAdaptiveRun(connection) ?? LoadLatestLegacyAdaptiveRun(connection)
+        var adaptiveRun = AdaptiveRunExportRepository.LoadLastCompletedAdaptiveRun(connection)
+            ?? AdaptiveRunExportRepository.LoadLatestLegacyAdaptiveRun(connection)
             ?? throw new InvalidOperationException("No completed /playadaptive run was found in the database.");
 
-        var gameSelections = LoadGameSelectionRows(connection, adaptiveRun);
-        var explanations = LoadDecisionExplanationRows(connection, adaptiveRun);
-        var contextRunSummaries = BuildContextRunSummaries(LoadAdaptiveDecisionRows(connection, adaptiveRun));
+        var gameSelections = AdaptiveRunExportRepository.LoadGameSelectionRows(connection, adaptiveRun);
+        var explanations = AdaptiveRunExportRepository.LoadDecisionExplanationRows(connection, adaptiveRun);
+        var decisions = AdaptiveRunExportRepository.LoadAdaptiveDecisionRows(connection, adaptiveRun);
+        var contextRunSummaries = AdaptiveRunExportProjector.BuildContextRunSummaries(decisions);
 
         var firstPromptTime = gameSelections.Count > 0
-            ? ParseTimestamp(gameSelections[0].Timestamp)
+            ? AdaptiveRunExportRepository.ParseTimestamp(gameSelections[0].Timestamp)
             : adaptiveRun.StartedAt;
 
         var folderName = $"adaptive_{firstPromptTime.ToLocalTime():yyyy-MM-dd_HH-mm}";
@@ -37,28 +36,34 @@ public static class AdaptiveRunTextExporter
 
         File.WriteAllText(
             Path.Combine(outputFolder, "game-selection-decisions.txt"),
-            BuildGameSelectionText(adaptiveRun.RunLabel, gameSelections),
+            AdaptiveRunExportFormatter.BuildGameSelectionText(adaptiveRun.RunLabel, gameSelections),
             Encoding.UTF8);
 
         File.WriteAllText(
             Path.Combine(outputFolder, "decision-explanations.txt"),
-            BuildDecisionExplanationsText(adaptiveRun.RunLabel, explanations),
+            AdaptiveRunExportFormatter.BuildDecisionExplanationsText(adaptiveRun.RunLabel, explanations),
             Encoding.UTF8);
 
-        WriteContextRunSummaryWorkbook(
+        AdaptiveRunExportFormatter.WriteContextRunSummaryWorkbook(
             Path.Combine(outputFolder, "context-run-payoff-summary.xlsx"),
             adaptiveRun.RunLabel,
             contextRunSummaries);
 
         File.WriteAllText(
             Path.Combine(outputFolder, "agent-explanation-prompt-templates.txt"),
-            BuildPromptTemplateText(),
+            AdaptiveRunExportFormatter.BuildPromptTemplateText(),
             Encoding.UTF8);
 
         return new AdaptiveRunTextExportResult(outputFolder, gameSelections.Count, explanations.Count, contextRunSummaries.Count);
     }
+}
 
-    private static AdaptiveRunRow? LoadLastCompletedAdaptiveRun(SqliteConnection connection)
+internal static class AdaptiveRunExportRepository
+{
+    private const int FirstAdaptiveRunId = 3;
+    private const string AdaptiveSelectionMarker = "__adaptive_selection__run";
+
+    internal static AdaptiveRunRow? LoadLastCompletedAdaptiveRun(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -99,7 +104,7 @@ public static class AdaptiveRunTextExporter
             ExperimentRunId: reader.IsDBNull(4) ? null : reader.GetInt64(4));
     }
 
-    private static AdaptiveRunRow? LoadLatestLegacyAdaptiveRun(SqliteConnection connection)
+    internal static AdaptiveRunRow? LoadLatestLegacyAdaptiveRun(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -152,7 +157,7 @@ public static class AdaptiveRunTextExporter
             IsLegacyInference: true);
     }
 
-    private static List<GameSelectionRow> LoadGameSelectionRows(SqliteConnection connection, AdaptiveRunRow adaptiveRun)
+    internal static List<GameSelectionRow> LoadGameSelectionRows(SqliteConnection connection, AdaptiveRunRow adaptiveRun)
     {
         if (adaptiveRun.LegacySelectionFirstId is not null && adaptiveRun.LegacySelectionLastId is not null)
             return LoadGameSelectionRowsForIdRange(
@@ -164,7 +169,7 @@ public static class AdaptiveRunTextExporter
         if (adaptiveRun.ExperimentRunId is not null)
         {
             command.CommandText = """
-                SELECT id, run_id, unique_name, model, context, prompt_version, player_role,
+                SELECT id, run_id, unique_name, model_profile_key, model, context, prompt_version, player_role,
                        selected_game, resolved_game, random_roll, raw_response, explanation, timestamp
                 FROM game_selection_decisions
                 WHERE experiment_run_id = $experiment_run_id
@@ -175,7 +180,7 @@ public static class AdaptiveRunTextExporter
         }
 
         command.CommandText = """
-            SELECT id, run_id, unique_name, model, context, prompt_version, player_role,
+            SELECT id, run_id, unique_name, model_profile_key, model, context, prompt_version, player_role,
                    selected_game, resolved_game, random_roll, raw_response, explanation, timestamp
             FROM game_selection_decisions
             WHERE timestamp >= $started_at
@@ -195,7 +200,7 @@ public static class AdaptiveRunTextExporter
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, run_id, unique_name, model, context, prompt_version, player_role,
+            SELECT id, run_id, unique_name, model_profile_key, model, context, prompt_version, player_role,
                    selected_game, resolved_game, random_roll, raw_response, explanation, timestamp
             FROM game_selection_decisions
             WHERE id <= $latest_id
@@ -258,7 +263,7 @@ public static class AdaptiveRunTextExporter
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, run_id, unique_name, model, context, prompt_version, player_role,
+            SELECT id, run_id, unique_name, model_profile_key, model, context, prompt_version, player_role,
                    selected_game, resolved_game, random_roll, raw_response, explanation, timestamp
             FROM game_selection_decisions
             WHERE id >= $first_selection_id
@@ -281,22 +286,23 @@ public static class AdaptiveRunTextExporter
                 Id: reader.GetInt64(0),
                 RunId: reader.GetInt32(1),
                 UniqueName: reader.GetString(2),
-                Model: reader.GetString(3),
-                Context: reader.GetString(4),
-                PromptVersion: reader.GetString(5),
-                PlayerRole: reader.GetString(6),
-                SelectedGame: reader.GetString(7),
-                ResolvedGame: reader.GetString(8),
-                RandomRoll: reader.IsDBNull(9) ? null : reader.GetInt32(9),
-                RawResponse: reader.GetString(10),
-                Explanation: reader.GetString(11),
-                Timestamp: reader.GetString(12)));
+                ModelProfileKey: reader.IsDBNull(3) ? "" : reader.GetString(3),
+                Model: reader.GetString(4),
+                Context: reader.GetString(5),
+                PromptVersion: reader.GetString(6),
+                PlayerRole: reader.GetString(7),
+                SelectedGame: reader.GetString(8),
+                ResolvedGame: reader.GetString(9),
+                RandomRoll: reader.IsDBNull(10) ? null : reader.GetInt32(10),
+                RawResponse: reader.GetString(11),
+                Explanation: reader.GetString(12),
+                Timestamp: reader.GetString(13)));
         }
 
         return rows;
     }
 
-    private static List<DecisionExplanationRow> LoadDecisionExplanationRows(SqliteConnection connection, AdaptiveRunRow adaptiveRun)
+    internal static List<DecisionExplanationRow> LoadDecisionExplanationRows(SqliteConnection connection, AdaptiveRunRow adaptiveRun)
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -308,6 +314,7 @@ public static class AdaptiveRunTextExporter
                    e.timestamp,
                    d.run_id,
                    d.unique_name,
+                   d.model_profile_key,
                    d.model,
                    d.game,
                    d.context,
@@ -364,28 +371,29 @@ public static class AdaptiveRunTextExporter
                 ExplanationTimestamp: reader.GetString(5),
                 RunId: reader.GetInt32(6),
                 UniqueName: reader.GetString(7),
-                Model: reader.GetString(8),
-                Game: reader.GetString(9),
-                Context: reader.GetString(10),
-                PromptVersion: reader.GetString(11),
-                PlayerRole: reader.IsDBNull(12) ? "" : reader.GetString(12),
-                DecisionRound: reader.GetInt32(13),
-                Choice: reader.GetInt32(14),
-                Payoff: reader.GetInt32(15),
-                RawResponse: reader.GetString(16),
-                DecisionTimestamp: reader.GetString(17)));
+                ModelProfileKey: reader.IsDBNull(8) ? "" : reader.GetString(8),
+                Model: reader.GetString(9),
+                Game: reader.GetString(10),
+                Context: reader.GetString(11),
+                PromptVersion: reader.GetString(12),
+                PlayerRole: reader.IsDBNull(13) ? "" : reader.GetString(13),
+                DecisionRound: reader.GetInt32(14),
+                Choice: reader.GetInt32(15),
+                Payoff: reader.GetInt32(16),
+                RawResponse: reader.GetString(17),
+                DecisionTimestamp: reader.GetString(18)));
         }
 
         return rows;
     }
 
-    private static List<GameDecisionRow> LoadAdaptiveDecisionRows(SqliteConnection connection, AdaptiveRunRow adaptiveRun)
+    internal static List<GameDecisionRow> LoadAdaptiveDecisionRows(SqliteConnection connection, AdaptiveRunRow adaptiveRun)
     {
         if (adaptiveRun.ExperimentRunId is not null)
         {
             using var scopedCommand = connection.CreateCommand();
             scopedCommand.CommandText = """
-                SELECT id, run_id, unique_name, model, game, context, prompt_version,
+                SELECT id, run_id, unique_name, model_profile_key, model, game, context, prompt_version,
                        player_role, round, choice, payoff, raw_response, timestamp
                 FROM decisions
                 WHERE experiment_run_id = $experiment_run_id
@@ -411,7 +419,7 @@ public static class AdaptiveRunTextExporter
         }
 
         command.CommandText = $"""
-            SELECT id, run_id, unique_name, model, game, context, prompt_version,
+            SELECT id, run_id, unique_name, model_profile_key, model, game, context, prompt_version,
                    player_role, round, choice, payoff, raw_response, timestamp
             FROM decisions
             WHERE unique_name IN ({string.Join(", ", parameters)})
@@ -431,16 +439,17 @@ public static class AdaptiveRunTextExporter
                 Id: reader.GetInt64(0),
                 RunId: reader.GetInt32(1),
                 UniqueName: reader.GetString(2),
-                Model: reader.GetString(3),
-                Game: reader.GetString(4),
-                Context: reader.GetString(5),
-                PromptVersion: reader.GetString(6),
-                PlayerRole: reader.IsDBNull(7) ? "" : reader.GetString(7),
-                Round: reader.GetInt32(8),
-                Choice: reader.GetInt32(9),
-                Payoff: reader.GetInt32(10),
-                RawResponse: reader.GetString(11),
-                Timestamp: reader.GetString(12)));
+                ModelProfileKey: reader.IsDBNull(3) ? "" : reader.GetString(3),
+                Model: reader.GetString(4),
+                Game: reader.GetString(5),
+                Context: reader.GetString(6),
+                PromptVersion: reader.GetString(7),
+                PlayerRole: reader.IsDBNull(8) ? "" : reader.GetString(8),
+                Round: reader.GetInt32(9),
+                Choice: reader.GetInt32(10),
+                Payoff: reader.GetInt32(11),
+                RawResponse: reader.GetString(12),
+                Timestamp: reader.GetString(13)));
         }
 
         return rows;
@@ -477,7 +486,29 @@ public static class AdaptiveRunTextExporter
         return uniqueNames;
     }
 
-    private static List<ContextRunSummaryRow> BuildContextRunSummaries(IReadOnlyList<GameDecisionRow> decisions)
+    internal static DateTimeOffset ParseTimestamp(string value)
+    {
+        if (DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AllowWhiteSpaces,
+            out var parsed))
+        {
+            return parsed;
+        }
+
+        return DateTimeOffset.Now;
+    }
+
+    private static string FormatSqliteTimestamp(DateTimeOffset value)
+        => value.ToUniversalTime().ToString(
+            "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+            CultureInfo.InvariantCulture);
+}
+
+internal static class AdaptiveRunExportProjector
+{
+    internal static List<ContextRunSummaryRow> BuildContextRunSummaries(IReadOnlyList<GameDecisionRow> decisions)
     {
         var summaries = new List<ContextRunSummaryRow>();
 
@@ -524,6 +555,7 @@ public static class AdaptiveRunTextExporter
 
         return new PlayerContextRunSummary(
             PlayerRole: playerRole,
+            ModelProfileKey: lastDecision.ModelProfileKey,
             Model: lastDecision.Model,
             DecisionCount: orderedRows.Count,
             TotalPayoff: lastDecision.Payoff,
@@ -568,7 +600,11 @@ public static class AdaptiveRunTextExporter
             summary.P++;
     }
 
-    private static string BuildGameSelectionText(string runLabel, IReadOnlyList<GameSelectionRow> rows)
+}
+
+internal static class AdaptiveRunExportFormatter
+{
+    internal static string BuildGameSelectionText(string runLabel, IReadOnlyList<GameSelectionRow> rows)
     {
         var builder = new StringBuilder();
         builder.AppendLine("Adaptive Game Selection Decisions");
@@ -588,6 +624,7 @@ public static class AdaptiveRunTextExporter
             builder.AppendLine($"Timestamp: {row.Timestamp}");
             builder.AppendLine($"Run: {row.RunId}");
             builder.AppendLine($"Player: {row.PlayerRole}");
+            builder.AppendLine($"Model profile: {row.ModelProfileKey}");
             builder.AppendLine($"Model: {row.Model}");
             builder.AppendLine($"Context: {row.Context}");
             builder.AppendLine($"Prompt version: {row.PromptVersion}");
@@ -603,7 +640,7 @@ public static class AdaptiveRunTextExporter
         return builder.ToString();
     }
 
-    private static string BuildDecisionExplanationsText(string runLabel, IReadOnlyList<DecisionExplanationRow> rows)
+    internal static string BuildDecisionExplanationsText(string runLabel, IReadOnlyList<DecisionExplanationRow> rows)
     {
         var builder = new StringBuilder();
         builder.AppendLine("Decision Explanations");
@@ -630,6 +667,7 @@ public static class AdaptiveRunTextExporter
             builder.AppendLine($"Context: {row.Context}");
             builder.AppendLine($"Prompt version: {row.PromptVersion}");
             builder.AppendLine($"Player: {row.PlayerRole}");
+            builder.AppendLine($"Model profile: {row.ModelProfileKey}");
             builder.AppendLine($"Model: {row.Model}");
             builder.AppendLine($"Decision round: {row.DecisionRound}");
             builder.AppendLine($"Choice: {row.Choice}");
@@ -642,12 +680,12 @@ public static class AdaptiveRunTextExporter
         return builder.ToString();
     }
 
-    private static void WriteContextRunSummaryWorkbook(
+    internal static void WriteContextRunSummaryWorkbook(
         string path,
         string runLabel,
         IReadOnlyList<ContextRunSummaryRow> rows)
     {
-        SimpleXlsxWriter.WriteWorkbook(
+        AdaptiveRunWorkbookWriter.WriteWorkbook(
             path,
             "Context Summary",
             BuildContextRunSummaryWorksheetRows(runLabel, rows),
@@ -675,6 +713,7 @@ public static class AdaptiveRunTextExporter
                 "Prompt Version",
                 "Unique Name",
                 "Player",
+                "Model Profile",
                 "Model",
                 "Total Payoff",
                 "Decision Count",
@@ -699,6 +738,7 @@ public static class AdaptiveRunTextExporter
                     row.PromptVersion,
                     row.UniqueName,
                     player.PlayerRole,
+                    player.ModelProfileKey,
                     player.Model,
                     player.TotalPayoff,
                     player.DecisionCount,
@@ -715,7 +755,7 @@ public static class AdaptiveRunTextExporter
         return worksheetRows;
     }
 
-    private static string BuildPromptTemplateText()
+    internal static string BuildPromptTemplateText()
     {
         var builder = new StringBuilder();
         builder.AppendLine("Agent Prompt Templates");
@@ -757,419 +797,407 @@ public static class AdaptiveRunTextExporter
         return builder.ToString();
     }
 
-    private static DateTimeOffset ParseTimestamp(string value)
-    {
-        if (DateTimeOffset.TryParse(
-            value,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AllowWhiteSpaces,
-            out var parsed))
-        {
-            return parsed;
-        }
+}
 
-        return DateTimeOffset.Now;
+internal sealed record AdaptiveRunRow(
+    long Id,
+    string RunLabel,
+    DateTimeOffset StartedAt,
+    DateTimeOffset CompletedAt,
+    long? ExperimentRunId = null,
+    long? LegacySelectionFirstId = null,
+    long? LegacySelectionLastId = null,
+    string? LegacyDecisionUniqueNamePrefix = null,
+    bool IsLegacyInference = false);
+
+internal sealed record GameSelectionRow(
+    long Id,
+    int RunId,
+    string UniqueName,
+    string ModelProfileKey,
+    string Model,
+    string Context,
+    string PromptVersion,
+    string PlayerRole,
+    string SelectedGame,
+    string ResolvedGame,
+    int? RandomRoll,
+    string RawResponse,
+    string Explanation,
+    string Timestamp);
+
+internal sealed record DecisionExplanationRow(
+    long Id,
+    long DecisionId,
+    string ExplanationType,
+    int? ExplanationRound,
+    string Explanation,
+    string ExplanationTimestamp,
+    int RunId,
+    string UniqueName,
+    string ModelProfileKey,
+    string Model,
+    string Game,
+    string Context,
+    string PromptVersion,
+    string PlayerRole,
+    int DecisionRound,
+    int Choice,
+    int Payoff,
+    string RawResponse,
+    string DecisionTimestamp);
+
+internal sealed record GameDecisionRow(
+    long Id,
+    int RunId,
+    string UniqueName,
+    string ModelProfileKey,
+    string Model,
+    string Game,
+    string Context,
+    string PromptVersion,
+    string PlayerRole,
+    int Round,
+    int Choice,
+    int Payoff,
+    string RawResponse,
+    string Timestamp);
+
+internal sealed record ContextRunSummaryRow(
+    int RunId,
+    string Game,
+    string Context,
+    string PromptVersion,
+    string UniqueName,
+    IReadOnlyList<PlayerContextRunSummary> PlayerSummaries);
+
+internal sealed record PlayerContextRunSummary(
+    string PlayerRole,
+    string ModelProfileKey,
+    string Model,
+    int DecisionCount,
+    int TotalPayoff,
+    int CooperationCount,
+    int DefectionCount)
+{
+    public int R { get; set; }
+    public int T { get; set; }
+    public int S { get; set; }
+    public int P { get; set; }
+}
+
+internal static class AdaptiveRunWorkbookWriter
+{
+    public static void WriteWorkbook(
+        string path,
+        string sheetName,
+        IReadOnlyList<IReadOnlyList<object?>> rows,
+        int frozenRow)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+
+        using var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write);
+        using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create);
+
+        WriteEntry(archive, "[Content_Types].xml", WriteContentTypes);
+        WriteEntry(archive, "_rels/.rels", WritePackageRelationships);
+        WriteEntry(archive, "xl/workbook.xml", writer => WriteWorkbookXml(writer, sheetName));
+        WriteEntry(archive, "xl/_rels/workbook.xml.rels", WriteWorkbookRelationships);
+        WriteEntry(archive, "xl/styles.xml", WriteStyles);
+        WriteEntry(archive, "xl/worksheets/sheet1.xml", writer => WriteWorksheet(writer, rows, frozenRow));
     }
 
-    private static string FormatSqliteTimestamp(DateTimeOffset value)
-        => value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
-
-    private sealed record AdaptiveRunRow(
-        long Id,
-        string RunLabel,
-        DateTimeOffset StartedAt,
-        DateTimeOffset CompletedAt,
-        long? ExperimentRunId = null,
-        long? LegacySelectionFirstId = null,
-        long? LegacySelectionLastId = null,
-        string? LegacyDecisionUniqueNamePrefix = null,
-        bool IsLegacyInference = false);
-
-    private sealed record GameSelectionRow(
-        long Id,
-        int RunId,
-        string UniqueName,
-        string Model,
-        string Context,
-        string PromptVersion,
-        string PlayerRole,
-        string SelectedGame,
-        string ResolvedGame,
-        int? RandomRoll,
-        string RawResponse,
-        string Explanation,
-        string Timestamp);
-
-    private sealed record DecisionExplanationRow(
-        long Id,
-        long DecisionId,
-        string ExplanationType,
-        int? ExplanationRound,
-        string Explanation,
-        string ExplanationTimestamp,
-        int RunId,
-        string UniqueName,
-        string Model,
-        string Game,
-        string Context,
-        string PromptVersion,
-        string PlayerRole,
-        int DecisionRound,
-        int Choice,
-        int Payoff,
-        string RawResponse,
-        string DecisionTimestamp);
-
-    private sealed record GameDecisionRow(
-        long Id,
-        int RunId,
-        string UniqueName,
-        string Model,
-        string Game,
-        string Context,
-        string PromptVersion,
-        string PlayerRole,
-        int Round,
-        int Choice,
-        int Payoff,
-        string RawResponse,
-        string Timestamp);
-
-    private sealed record ContextRunSummaryRow(
-        int RunId,
-        string Game,
-        string Context,
-        string PromptVersion,
-        string UniqueName,
-        IReadOnlyList<PlayerContextRunSummary> PlayerSummaries);
-
-    private sealed record PlayerContextRunSummary(
-        string PlayerRole,
-        string Model,
-        int DecisionCount,
-        int TotalPayoff,
-        int CooperationCount,
-        int DefectionCount)
+    private static void WriteEntry(ZipArchive archive, string name, Action<XmlWriter> writeXml)
     {
-        public int R { get; set; }
-        public int T { get; set; }
-        public int S { get; set; }
-        public int P { get; set; }
+        var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        using var writer = XmlWriter.Create(stream, new XmlWriterSettings
+        {
+            Encoding = new UTF8Encoding(false),
+            Indent = false
+        });
+
+        writeXml(writer);
     }
 
-    private static class SimpleXlsxWriter
+    private static void WriteContentTypes(XmlWriter writer)
     {
-        public static void WriteWorkbook(
-            string path,
-            string sheetName,
-            IReadOnlyList<IReadOnlyList<object?>> rows,
-            int frozenRow)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+        writer.WriteStartDocument();
+        writer.WriteStartElement("Types", "http://schemas.openxmlformats.org/package/2006/content-types");
+        writer.WriteStartElement("Default");
+        writer.WriteAttributeString("Extension", "rels");
+        writer.WriteAttributeString("ContentType", "application/vnd.openxmlformats-package.relationships+xml");
+        writer.WriteEndElement();
+        writer.WriteStartElement("Default");
+        writer.WriteAttributeString("Extension", "xml");
+        writer.WriteAttributeString("ContentType", "application/xml");
+        writer.WriteEndElement();
+        writer.WriteStartElement("Override");
+        writer.WriteAttributeString("PartName", "/xl/workbook.xml");
+        writer.WriteAttributeString("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
+        writer.WriteEndElement();
+        writer.WriteStartElement("Override");
+        writer.WriteAttributeString("PartName", "/xl/worksheets/sheet1.xml");
+        writer.WriteAttributeString("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
+        writer.WriteEndElement();
+        writer.WriteStartElement("Override");
+        writer.WriteAttributeString("PartName", "/xl/styles.xml");
+        writer.WriteAttributeString("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
 
-            using var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write);
-            using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create);
+    private static void WritePackageRelationships(XmlWriter writer)
+    {
+        writer.WriteStartDocument();
+        writer.WriteStartElement("Relationships", "http://schemas.openxmlformats.org/package/2006/relationships");
+        writer.WriteStartElement("Relationship");
+        writer.WriteAttributeString("Id", "rId1");
+        writer.WriteAttributeString("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument");
+        writer.WriteAttributeString("Target", "xl/workbook.xml");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
 
-            WriteEntry(archive, "[Content_Types].xml", WriteContentTypes);
-            WriteEntry(archive, "_rels/.rels", WritePackageRelationships);
-            WriteEntry(archive, "xl/workbook.xml", writer => WriteWorkbookXml(writer, sheetName));
-            WriteEntry(archive, "xl/_rels/workbook.xml.rels", WriteWorkbookRelationships);
-            WriteEntry(archive, "xl/styles.xml", WriteStyles);
-            WriteEntry(archive, "xl/worksheets/sheet1.xml", writer => WriteWorksheet(writer, rows, frozenRow));
-        }
+    private static void WriteWorkbookXml(XmlWriter writer, string sheetName)
+    {
+        writer.WriteStartDocument();
+        writer.WriteStartElement("workbook", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        writer.WriteAttributeString("xmlns", "r", null, "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        writer.WriteStartElement("sheets");
+        writer.WriteStartElement("sheet");
+        writer.WriteAttributeString("name", sheetName);
+        writer.WriteAttributeString("sheetId", "1");
+        writer.WriteAttributeString("r", "id", null, "rId1");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
 
-        private static void WriteEntry(ZipArchive archive, string name, Action<XmlWriter> writeXml)
-        {
-            var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
-            using var stream = entry.Open();
-            using var writer = XmlWriter.Create(stream, new XmlWriterSettings
-            {
-                Encoding = new UTF8Encoding(false),
-                Indent = false
-            });
+    private static void WriteWorkbookRelationships(XmlWriter writer)
+    {
+        writer.WriteStartDocument();
+        writer.WriteStartElement("Relationships", "http://schemas.openxmlformats.org/package/2006/relationships");
+        writer.WriteStartElement("Relationship");
+        writer.WriteAttributeString("Id", "rId1");
+        writer.WriteAttributeString("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
+        writer.WriteAttributeString("Target", "worksheets/sheet1.xml");
+        writer.WriteEndElement();
+        writer.WriteStartElement("Relationship");
+        writer.WriteAttributeString("Id", "rId2");
+        writer.WriteAttributeString("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles");
+        writer.WriteAttributeString("Target", "styles.xml");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
 
-            writeXml(writer);
-        }
+    private static void WriteStyles(XmlWriter writer)
+    {
+        writer.WriteStartDocument();
+        writer.WriteStartElement("styleSheet", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        writer.WriteStartElement("fonts");
+        writer.WriteAttributeString("count", "2");
+        writer.WriteStartElement("font");
+        writer.WriteStartElement("sz");
+        writer.WriteAttributeString("val", "11");
+        writer.WriteEndElement();
+        writer.WriteStartElement("name");
+        writer.WriteAttributeString("val", "Calibri");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteStartElement("font");
+        writer.WriteStartElement("b");
+        writer.WriteEndElement();
+        writer.WriteStartElement("sz");
+        writer.WriteAttributeString("val", "11");
+        writer.WriteEndElement();
+        writer.WriteStartElement("name");
+        writer.WriteAttributeString("val", "Calibri");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndElement();
 
-        private static void WriteContentTypes(XmlWriter writer)
-        {
-            writer.WriteStartDocument();
-            writer.WriteStartElement("Types", "http://schemas.openxmlformats.org/package/2006/content-types");
-            writer.WriteStartElement("Default");
-            writer.WriteAttributeString("Extension", "rels");
-            writer.WriteAttributeString("ContentType", "application/vnd.openxmlformats-package.relationships+xml");
-            writer.WriteEndElement();
-            writer.WriteStartElement("Default");
-            writer.WriteAttributeString("Extension", "xml");
-            writer.WriteAttributeString("ContentType", "application/xml");
-            writer.WriteEndElement();
-            writer.WriteStartElement("Override");
-            writer.WriteAttributeString("PartName", "/xl/workbook.xml");
-            writer.WriteAttributeString("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
-            writer.WriteEndElement();
-            writer.WriteStartElement("Override");
-            writer.WriteAttributeString("PartName", "/xl/worksheets/sheet1.xml");
-            writer.WriteAttributeString("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
-            writer.WriteEndElement();
-            writer.WriteStartElement("Override");
-            writer.WriteAttributeString("PartName", "/xl/styles.xml");
-            writer.WriteAttributeString("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndDocument();
-        }
+        writer.WriteStartElement("fills");
+        writer.WriteAttributeString("count", "2");
+        writer.WriteStartElement("fill");
+        writer.WriteStartElement("patternFill");
+        writer.WriteAttributeString("patternType", "none");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteStartElement("fill");
+        writer.WriteStartElement("patternFill");
+        writer.WriteAttributeString("patternType", "gray125");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndElement();
 
-        private static void WritePackageRelationships(XmlWriter writer)
-        {
-            writer.WriteStartDocument();
-            writer.WriteStartElement("Relationships", "http://schemas.openxmlformats.org/package/2006/relationships");
-            writer.WriteStartElement("Relationship");
-            writer.WriteAttributeString("Id", "rId1");
-            writer.WriteAttributeString("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument");
-            writer.WriteAttributeString("Target", "xl/workbook.xml");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndDocument();
-        }
+        writer.WriteStartElement("borders");
+        writer.WriteAttributeString("count", "1");
+        writer.WriteStartElement("border");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
 
-        private static void WriteWorkbookXml(XmlWriter writer, string sheetName)
-        {
-            writer.WriteStartDocument();
-            writer.WriteStartElement("workbook", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-            writer.WriteAttributeString("xmlns", "r", null, "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
-            writer.WriteStartElement("sheets");
-            writer.WriteStartElement("sheet");
-            writer.WriteAttributeString("name", sheetName);
-            writer.WriteAttributeString("sheetId", "1");
-            writer.WriteAttributeString("r", "id", null, "rId1");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndDocument();
-        }
+        writer.WriteStartElement("cellStyleXfs");
+        writer.WriteAttributeString("count", "1");
+        WriteXf(writer, "0", "0", "0", includeXfId: false);
+        writer.WriteEndElement();
 
-        private static void WriteWorkbookRelationships(XmlWriter writer)
-        {
-            writer.WriteStartDocument();
-            writer.WriteStartElement("Relationships", "http://schemas.openxmlformats.org/package/2006/relationships");
-            writer.WriteStartElement("Relationship");
-            writer.WriteAttributeString("Id", "rId1");
-            writer.WriteAttributeString("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
-            writer.WriteAttributeString("Target", "worksheets/sheet1.xml");
-            writer.WriteEndElement();
-            writer.WriteStartElement("Relationship");
-            writer.WriteAttributeString("Id", "rId2");
-            writer.WriteAttributeString("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles");
-            writer.WriteAttributeString("Target", "styles.xml");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndDocument();
-        }
+        writer.WriteStartElement("cellXfs");
+        writer.WriteAttributeString("count", "3");
+        WriteXf(writer, "0", "0", "0", includeXfId: true);
+        WriteXf(writer, "1", "0", "0", includeXfId: true);
+        WriteXf(writer, "1", "0", "0", includeXfId: true);
+        writer.WriteEndElement();
 
-        private static void WriteStyles(XmlWriter writer)
-        {
-            writer.WriteStartDocument();
-            writer.WriteStartElement("styleSheet", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-            writer.WriteStartElement("fonts");
-            writer.WriteAttributeString("count", "2");
-            writer.WriteStartElement("font");
-            writer.WriteStartElement("sz");
-            writer.WriteAttributeString("val", "11");
-            writer.WriteEndElement();
-            writer.WriteStartElement("name");
-            writer.WriteAttributeString("val", "Calibri");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteStartElement("font");
-            writer.WriteStartElement("b");
-            writer.WriteEndElement();
-            writer.WriteStartElement("sz");
-            writer.WriteAttributeString("val", "11");
-            writer.WriteEndElement();
-            writer.WriteStartElement("name");
-            writer.WriteAttributeString("val", "Calibri");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndElement();
+        writer.WriteStartElement("cellStyles");
+        writer.WriteAttributeString("count", "1");
+        writer.WriteStartElement("cellStyle");
+        writer.WriteAttributeString("name", "Normal");
+        writer.WriteAttributeString("xfId", "0");
+        writer.WriteAttributeString("builtinId", "0");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
 
-            writer.WriteStartElement("fills");
-            writer.WriteAttributeString("count", "2");
-            writer.WriteStartElement("fill");
-            writer.WriteStartElement("patternFill");
-            writer.WriteAttributeString("patternType", "none");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteStartElement("fill");
-            writer.WriteStartElement("patternFill");
-            writer.WriteAttributeString("patternType", "gray125");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndElement();
+        writer.WriteStartElement("dxfs");
+        writer.WriteAttributeString("count", "0");
+        writer.WriteEndElement();
 
-            writer.WriteStartElement("borders");
-            writer.WriteAttributeString("count", "1");
-            writer.WriteStartElement("border");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
+        writer.WriteStartElement("tableStyles");
+        writer.WriteAttributeString("count", "0");
+        writer.WriteAttributeString("defaultTableStyle", "TableStyleMedium2");
+        writer.WriteAttributeString("defaultPivotStyle", "PivotStyleLight16");
+        writer.WriteEndElement();
 
-            writer.WriteStartElement("cellStyleXfs");
-            writer.WriteAttributeString("count", "1");
-            WriteXf(writer, "0", "0", "0", includeXfId: false);
-            writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
 
-            writer.WriteStartElement("cellXfs");
-            writer.WriteAttributeString("count", "3");
-            WriteXf(writer, "0", "0", "0", includeXfId: true);
-            WriteXf(writer, "1", "0", "0", includeXfId: true);
-            WriteXf(writer, "1", "0", "0", includeXfId: true);
-            writer.WriteEndElement();
-
-            writer.WriteStartElement("cellStyles");
-            writer.WriteAttributeString("count", "1");
-            writer.WriteStartElement("cellStyle");
-            writer.WriteAttributeString("name", "Normal");
+    private static void WriteXf(
+        XmlWriter writer,
+        string fontId,
+        string fillId,
+        string borderId,
+        bool includeXfId)
+    {
+        writer.WriteStartElement("xf");
+        writer.WriteAttributeString("numFmtId", "0");
+        writer.WriteAttributeString("fontId", fontId);
+        writer.WriteAttributeString("fillId", fillId);
+        writer.WriteAttributeString("borderId", borderId);
+        if (includeXfId)
             writer.WriteAttributeString("xfId", "0");
-            writer.WriteAttributeString("builtinId", "0");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
+        writer.WriteEndElement();
+    }
 
-            writer.WriteStartElement("dxfs");
-            writer.WriteAttributeString("count", "0");
-            writer.WriteEndElement();
+    private static void WriteWorksheet(XmlWriter writer, IReadOnlyList<IReadOnlyList<object?>> rows, int frozenRow)
+    {
+        writer.WriteStartDocument();
+        writer.WriteStartElement("worksheet", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        WriteSheetViews(writer, frozenRow);
+        WriteColumns(writer);
+        writer.WriteStartElement("sheetData");
 
-            writer.WriteStartElement("tableStyles");
-            writer.WriteAttributeString("count", "0");
-            writer.WriteAttributeString("defaultTableStyle", "TableStyleMedium2");
-            writer.WriteAttributeString("defaultPivotStyle", "PivotStyleLight16");
-            writer.WriteEndElement();
-
-            writer.WriteEndElement();
-            writer.WriteEndDocument();
-        }
-
-        private static void WriteXf(
-            XmlWriter writer,
-            string fontId,
-            string fillId,
-            string borderId,
-            bool includeXfId)
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
         {
-            writer.WriteStartElement("xf");
-            writer.WriteAttributeString("numFmtId", "0");
-            writer.WriteAttributeString("fontId", fontId);
-            writer.WriteAttributeString("fillId", fillId);
-            writer.WriteAttributeString("borderId", borderId);
-            if (includeXfId)
-                writer.WriteAttributeString("xfId", "0");
-            writer.WriteEndElement();
-        }
+            var excelRow = rowIndex + 1;
+            writer.WriteStartElement("row");
+            writer.WriteAttributeString("r", excelRow.ToString(CultureInfo.InvariantCulture));
 
-        private static void WriteWorksheet(XmlWriter writer, IReadOnlyList<IReadOnlyList<object?>> rows, int frozenRow)
-        {
-            writer.WriteStartDocument();
-            writer.WriteStartElement("worksheet", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-            WriteSheetViews(writer, frozenRow);
-            WriteColumns(writer);
-            writer.WriteStartElement("sheetData");
-
-            for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+            var cells = rows[rowIndex];
+            for (var columnIndex = 0; columnIndex < cells.Count; columnIndex++)
             {
-                var excelRow = rowIndex + 1;
-                writer.WriteStartElement("row");
-                writer.WriteAttributeString("r", excelRow.ToString(CultureInfo.InvariantCulture));
+                var value = cells[columnIndex];
+                if (value is null)
+                    continue;
 
-                var cells = rows[rowIndex];
-                for (var columnIndex = 0; columnIndex < cells.Count; columnIndex++)
-                {
-                    var value = cells[columnIndex];
-                    if (value is null)
-                        continue;
-
-                    var style = excelRow == 1 ? 1 : excelRow == frozenRow ? 2 : 0;
-                    WriteCell(writer, excelRow, columnIndex + 1, value, style);
-                }
-
-                writer.WriteEndElement();
+                var style = excelRow == 1 ? 1 : excelRow == frozenRow ? 2 : 0;
+                WriteCell(writer, excelRow, columnIndex + 1, value, style);
             }
 
             writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndDocument();
         }
 
-        private static void WriteSheetViews(XmlWriter writer, int frozenRow)
-        {
-            writer.WriteStartElement("sheetViews");
-            writer.WriteStartElement("sheetView");
-            writer.WriteAttributeString("workbookViewId", "0");
-            writer.WriteStartElement("pane");
-            writer.WriteAttributeString("ySplit", frozenRow.ToString(CultureInfo.InvariantCulture));
-            writer.WriteAttributeString("topLeftCell", $"A{frozenRow + 1}");
-            writer.WriteAttributeString("activePane", "bottomLeft");
-            writer.WriteAttributeString("state", "frozen");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-        }
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
 
-        private static void WriteColumns(XmlWriter writer)
+    private static void WriteSheetViews(XmlWriter writer, int frozenRow)
+    {
+        writer.WriteStartElement("sheetViews");
+        writer.WriteStartElement("sheetView");
+        writer.WriteAttributeString("workbookViewId", "0");
+        writer.WriteStartElement("pane");
+        writer.WriteAttributeString("ySplit", frozenRow.ToString(CultureInfo.InvariantCulture));
+        writer.WriteAttributeString("topLeftCell", $"A{frozenRow + 1}");
+        writer.WriteAttributeString("activePane", "bottomLeft");
+        writer.WriteAttributeString("state", "frozen");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+    }
+
+    private static void WriteColumns(XmlWriter writer)
+    {
+        var widths = new[]
         {
-            var widths = new[]
-            {
                 8d, 10d, 28d, 15d, 48d, 10d, 34d, 14d, 14d, 18d, 16d, 8d, 8d, 8d, 8d
             };
 
-            writer.WriteStartElement("cols");
-            for (var i = 0; i < widths.Length; i++)
-            {
-                writer.WriteStartElement("col");
-                writer.WriteAttributeString("min", (i + 1).ToString(CultureInfo.InvariantCulture));
-                writer.WriteAttributeString("max", (i + 1).ToString(CultureInfo.InvariantCulture));
-                writer.WriteAttributeString("width", widths[i].ToString(CultureInfo.InvariantCulture));
-                writer.WriteAttributeString("customWidth", "1");
-                writer.WriteEndElement();
-            }
-
+        writer.WriteStartElement("cols");
+        for (var i = 0; i < widths.Length; i++)
+        {
+            writer.WriteStartElement("col");
+            writer.WriteAttributeString("min", (i + 1).ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("max", (i + 1).ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("width", widths[i].ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("customWidth", "1");
             writer.WriteEndElement();
         }
 
-        private static void WriteCell(XmlWriter writer, int row, int column, object value, int style)
+        writer.WriteEndElement();
+    }
+
+    private static void WriteCell(XmlWriter writer, int row, int column, object value, int style)
+    {
+        writer.WriteStartElement("c");
+        writer.WriteAttributeString("r", $"{ColumnName(column)}{row}");
+        if (style > 0)
+            writer.WriteAttributeString("s", style.ToString(CultureInfo.InvariantCulture));
+
+        if (value is int or long or double or decimal)
         {
-            writer.WriteStartElement("c");
-            writer.WriteAttributeString("r", $"{ColumnName(column)}{row}");
-            if (style > 0)
-                writer.WriteAttributeString("s", style.ToString(CultureInfo.InvariantCulture));
-
-            if (value is int or long or double or decimal)
-            {
-                writer.WriteStartElement("v");
-                writer.WriteString(Convert.ToString(value, CultureInfo.InvariantCulture));
-                writer.WriteEndElement();
-            }
-            else
-            {
-                writer.WriteAttributeString("t", "inlineStr");
-                writer.WriteStartElement("is");
-                writer.WriteStartElement("t");
-                writer.WriteString(value.ToString());
-                writer.WriteEndElement();
-                writer.WriteEndElement();
-            }
-
+            writer.WriteStartElement("v");
+            writer.WriteString(Convert.ToString(value, CultureInfo.InvariantCulture));
+            writer.WriteEndElement();
+        }
+        else
+        {
+            writer.WriteAttributeString("t", "inlineStr");
+            writer.WriteStartElement("is");
+            writer.WriteStartElement("t");
+            writer.WriteString(value.ToString());
+            writer.WriteEndElement();
             writer.WriteEndElement();
         }
 
-        private static string ColumnName(int column)
-        {
-            var name = string.Empty;
-            while (column > 0)
-            {
-                column--;
-                name = (char)('A' + column % 26) + name;
-                column /= 26;
-            }
+        writer.WriteEndElement();
+    }
 
-            return name;
+    private static string ColumnName(int column)
+    {
+        var name = string.Empty;
+        while (column > 0)
+        {
+            column--;
+            name = (char)('A' + column % 26) + name;
+            column /= 26;
         }
+
+        return name;
     }
 }

@@ -35,6 +35,7 @@ public static class DbInit
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     experiment_run_id INTEGER,
                     unique_name TEXT NOT NULL,
+                    model_profile_key TEXT,
                     model TEXT NOT NULL,
                     game TEXT NOT NULL CHECK (game IN ('PD', 'SD')),
                     context TEXT NOT NULL,
@@ -68,6 +69,7 @@ public static class DbInit
                     experiment_run_id INTEGER,
                     run_id INTEGER NOT NULL,
                     unique_name TEXT NOT NULL,
+                    model_profile_key TEXT,
                     model TEXT NOT NULL,
                     context TEXT NOT NULL,
                     prompt_version TEXT NOT NULL,
@@ -92,9 +94,21 @@ public static class DbInit
             EnsureColumn(
                 connection,
                 transaction,
+                "decisions",
+                "model_profile_key",
+                "TEXT");
+            EnsureColumn(
+                connection,
+                transaction,
                 "game_selection_decisions",
                 "experiment_run_id",
                 "INTEGER REFERENCES experiment_runs(id)");
+            EnsureColumn(
+                connection,
+                transaction,
+                "game_selection_decisions",
+                "model_profile_key",
+                "TEXT");
 
             Execute(connection, transaction, """
                 INSERT OR IGNORE INTO experiment_runs
@@ -117,6 +131,9 @@ public static class DbInit
                 CREATE INDEX IF NOT EXISTS idx_decisions_model_game_ctx
                     ON decisions (model, game, context);
 
+                CREATE INDEX IF NOT EXISTS idx_decisions_model_profile_key
+                    ON decisions (model_profile_key);
+
                 CREATE UNIQUE INDEX IF NOT EXISTS ux_decisions_experiment_identity
                     ON decisions (experiment_run_id, unique_name, player_role, round)
                     WHERE experiment_run_id IS NOT NULL;
@@ -129,6 +146,9 @@ public static class DbInit
 
                 CREATE INDEX IF NOT EXISTS idx_game_selection_experiment_run_id
                     ON game_selection_decisions (experiment_run_id);
+
+                CREATE INDEX IF NOT EXISTS idx_game_selection_model_profile_key
+                    ON game_selection_decisions (model_profile_key);
 
                 CREATE UNIQUE INDEX IF NOT EXISTS ux_game_selection_experiment_identity
                     ON game_selection_decisions

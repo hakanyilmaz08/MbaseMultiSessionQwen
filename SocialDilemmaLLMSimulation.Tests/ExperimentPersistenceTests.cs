@@ -7,7 +7,7 @@ public sealed class ExperimentPersistenceTests
     [Fact]
     public void EnsureCreatedMigratesLegacyRowsWithoutClaimingRunIdentity()
     {
-        using var database = new TemporaryExperimentDatabase();
+        using var database = new TemporaryExperimentEnvironment();
         using (var connection = database.OpenConnection())
         {
             using var command = connection.CreateCommand();
@@ -58,7 +58,9 @@ public sealed class ExperimentPersistenceTests
 
         using var migrated = database.OpenConnection();
         Assert.True(ColumnExists(migrated, "decisions", "experiment_run_id"));
+        Assert.True(ColumnExists(migrated, "decisions", "model_profile_key"));
         Assert.True(ColumnExists(migrated, "game_selection_decisions", "experiment_run_id"));
+        Assert.True(ColumnExists(migrated, "game_selection_decisions", "model_profile_key"));
         Assert.Equal(
             "adaptive",
             ExecuteScalar<string>(
@@ -74,7 +76,7 @@ public sealed class ExperimentPersistenceTests
     [Fact]
     public void ContextRunWriteCommitsAsOneUnitAndRollsBackInvalidBatch()
     {
-        using var database = new TemporaryExperimentDatabase();
+        using var database = new TemporaryExperimentEnvironment();
         DbInit.EnsureCreated();
         var experimentRunId = ExperimentRunLogger.Start("standard-pd", "model-a_vs_model-b");
 
@@ -131,7 +133,7 @@ public sealed class ExperimentPersistenceTests
     [Fact]
     public void BothSelectionRowsRollBackWhenEitherInsertFails()
     {
-        using var database = new TemporaryExperimentDatabase();
+        using var database = new TemporaryExperimentEnvironment();
         DbInit.EnsureCreated();
         var experimentRunId = ExperimentRunLogger.Start("adaptive", "model");
         var duplicateIdentity = new[]
@@ -154,7 +156,7 @@ public sealed class ExperimentPersistenceTests
     [Fact]
     public void AdaptiveExportUsesRunIdentityInsteadOfNearbyLegacyRows()
     {
-        using var database = new TemporaryExperimentDatabase();
+        using var database = new TemporaryExperimentEnvironment();
         DbInit.EnsureCreated();
         var adaptiveRunId = AdaptiveRunLogger.Start("model-a_vs_model-b");
 
@@ -249,38 +251,4 @@ public sealed class ExperimentPersistenceTests
         return (T)command.ExecuteScalar()!;
     }
 
-    private sealed class TemporaryExperimentDatabase : IDisposable
-    {
-        private readonly string? _previousDatabasePath;
-        private readonly string? _previousExportPath;
-        private readonly string _directory;
-
-        public TemporaryExperimentDatabase()
-        {
-            _previousDatabasePath = Environment.GetEnvironmentVariable("MBASE_DB_PATH");
-            _previousExportPath = Environment.GetEnvironmentVariable("MBASE_EXPORT_DIR");
-            _directory = Path.Combine(Path.GetTempPath(), $"mbase-tests-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(_directory);
-            Environment.SetEnvironmentVariable(
-                "MBASE_DB_PATH",
-                Path.Combine(_directory, "test.db"));
-            Environment.SetEnvironmentVariable(
-                "MBASE_EXPORT_DIR",
-                Path.Combine(_directory, "exports"));
-        }
-
-        public SqliteConnection OpenConnection()
-        {
-            var connection = new SqliteConnection(ExperimentPaths.DatabaseConnectionString);
-            connection.Open();
-            return connection;
-        }
-
-        public void Dispose()
-        {
-            Environment.SetEnvironmentVariable("MBASE_DB_PATH", _previousDatabasePath);
-            Environment.SetEnvironmentVariable("MBASE_EXPORT_DIR", _previousExportPath);
-            Directory.Delete(_directory, recursive: true);
-        }
-    }
 }

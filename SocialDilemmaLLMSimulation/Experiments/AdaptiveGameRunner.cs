@@ -79,8 +79,8 @@ public sealed class AdaptiveGameRunner
         int rounds = 50,
         long? experimentRunId = null)
     {
-        var (modelA, modelB) = _sessionCoordinator.ResolveRunModels();
-        var runLabel = RepeatedGameRunnerBase.BuildRunLabel(modelA, modelB);
+        var (profileA, profileB) = _sessionCoordinator.ResolveRunModels();
+        var runLabel = RepeatedGameRunnerBase.BuildRunLabel(profileA, profileB);
         var stableSessionPrefix = string.IsNullOrWhiteSpace(baseSessionPrefix)
             ? runLabel
             : $"{baseSessionPrefix}__{runLabel}";
@@ -102,8 +102,8 @@ public sealed class AdaptiveGameRunner
                 version,
                 runId: 1,
                 rounds,
-                modelA,
-                modelB,
+                profileA,
+                profileB,
                 experimentRunId));
         }
 
@@ -115,8 +115,8 @@ public sealed class AdaptiveGameRunner
                 version,
                 runId: 2,
                 rounds,
-                modelA,
-                modelB,
+                profileA,
+                profileB,
                 experimentRunId));
         }
 
@@ -127,8 +127,8 @@ public sealed class AdaptiveGameRunner
                 sessionPrefix,
                 runId,
                 feedbackSnapshot,
-                modelA,
-                modelB,
+                profileA,
+                profileB,
                 experimentRunId);
 
             selections.Add(selection);
@@ -142,8 +142,8 @@ public sealed class AdaptiveGameRunner
                     version,
                     runId,
                     rounds,
-                    modelA,
-                    modelB,
+                    profileA,
+                    profileB,
                     experimentRunId));
             }
         }
@@ -157,8 +157,8 @@ public sealed class AdaptiveGameRunner
         string version,
         int runId,
         int rounds,
-        string modelA,
-        string modelB,
+        ModelProfile profileA,
+        ModelProfile profileB,
         long? experimentRunId)
     {
         var contextTitle = runner.GetAgentPromptInfo(version).Title;
@@ -178,8 +178,8 @@ public sealed class AdaptiveGameRunner
                 rounds,
                 resetPrompts: true,
                 runId,
-                modelA,
-                modelB,
+                profileA.Key,
+                profileB.Key,
                 experimentRunId);
 
             return new AdaptiveGameContextRun(runId, version, contextTitle, runner.GameCode, result);
@@ -195,8 +195,8 @@ public sealed class AdaptiveGameRunner
         string sessionPrefix,
         int runId,
         IReadOnlyList<AdaptiveGameContextRun> feedbackSnapshot,
-        string modelA,
-        string modelB,
+        ModelProfile profileA,
+        ModelProfile profileB,
         long? experimentRunId)
     {
         const string selectionContext = "All Contexts";
@@ -210,15 +210,15 @@ public sealed class AdaptiveGameRunner
 
         try
         {
-            _sessionCoordinator.PrepareExperimentSession(sessionA, modelA, systemPrompt, resetIfExists: true);
-            _sessionCoordinator.PrepareExperimentSession(sessionB, modelB, systemPrompt, resetIfExists: true);
+            _sessionCoordinator.PrepareExperimentSession(sessionA, profileA, systemPrompt, resetIfExists: true);
+            _sessionCoordinator.PrepareExperimentSession(sessionB, profileB, systemPrompt, resetIfExists: true);
 
             var rawA = await _sessionCoordinator.SendExperimentPromptAsync(sessionA, promptA);
             var rawB = await _sessionCoordinator.SendExperimentPromptAsync(sessionB, promptB);
 
-            var choiceA = ParseGameChoice(rawA.Reply)
+            var choiceA = RepeatedGameResponseParser.ParseGameChoice(rawA.Reply)
                 ?? throw new InvalidOperationException($"Game selection for player A could not be parsed. Raw: {rawA.Reply}");
-            var choiceB = ParseGameChoice(rawB.Reply)
+            var choiceB = RepeatedGameResponseParser.ParseGameChoice(rawB.Reply)
                 ?? throw new InvalidOperationException($"Game selection for player B could not be parsed. Raw: {rawB.Reply}");
 
             int? randomRoll = string.Equals(choiceA, choiceB, StringComparison.OrdinalIgnoreCase)
@@ -236,7 +236,7 @@ public sealed class AdaptiveGameRunner
                     new GameSelectionWrite(
                         runId,
                         uniqueName,
-                        modelA,
+                        profileA.Model,
                         selectionContext,
                         selectionPromptVersion,
                         "A",
@@ -244,11 +244,12 @@ public sealed class AdaptiveGameRunner
                         resolvedGame,
                         randomRoll,
                         rawA.Reply.Trim(),
-                        ExtractExplanation(rawA.Reply)),
+                        RepeatedGameResponseParser.ExtractExplanation(rawA.Reply),
+                        profileA.Key),
                     new GameSelectionWrite(
                         runId,
                         uniqueName,
-                        modelB,
+                        profileB.Model,
                         selectionContext,
                         selectionPromptVersion,
                         "B",
@@ -256,7 +257,8 @@ public sealed class AdaptiveGameRunner
                         resolvedGame,
                         randomRoll,
                         rawB.Reply.Trim(),
-                        ExtractExplanation(rawB.Reply))
+                        RepeatedGameResponseParser.ExtractExplanation(rawB.Reply),
+                        profileB.Key)
                 });
 
             Console.WriteLine(
@@ -358,46 +360,6 @@ Base your choice only on the feedback summary in the user message.
         {
             Console.WriteLine($"[Warn] Failed to clear {sessionId}: {ex.Message}");
         }
-    }
-
-    private static string? ParseGameChoice(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-
-        var normalized = raw.Trim();
-        if (StartsWithChoice(normalized, "PD"))
-            return "PD";
-        if (StartsWithChoice(normalized, "SD"))
-            return "SD";
-
-        var tokens = normalized
-            .Split(new[] { ' ', '\r', '\n', '\t', ':', ';', ',', '.', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
-
-        foreach (var token in tokens)
-        {
-            if (string.Equals(token, "PD", StringComparison.OrdinalIgnoreCase))
-                return "PD";
-            if (string.Equals(token, "SD", StringComparison.OrdinalIgnoreCase))
-                return "SD";
-        }
-
-        return null;
-    }
-
-    private static bool StartsWithChoice(string value, string choice)
-        => value.StartsWith(choice, StringComparison.OrdinalIgnoreCase)
-            || value.StartsWith($"GAME: {choice}", StringComparison.OrdinalIgnoreCase)
-            || value.StartsWith($"GAME {choice}", StringComparison.OrdinalIgnoreCase);
-
-    private static string ExtractExplanation(string raw)
-    {
-        var marker = "EXPLANATION:";
-        var index = raw.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (index < 0)
-            return raw.Trim();
-
-        return raw[(index + marker.Length)..].Trim();
     }
 
     private static string BuildSelectionUniqueName(string sessionPrefix, int runId)

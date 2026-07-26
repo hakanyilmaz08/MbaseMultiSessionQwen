@@ -13,8 +13,8 @@ public class SessionManager
     private readonly string _storePath;
     private readonly JsonSerializerOptions _opts;
     private readonly string _mode; // client | server
-    private readonly string _defaultModel;
-    private readonly Dictionary<string, ModelProfile> _models;
+    private readonly string _defaultProfileKey;
+    private readonly Dictionary<string, ModelProfile> _profilesByKey;
 
     private readonly bool _compactSend;
     private readonly int _compactLastPairs;
@@ -30,7 +30,7 @@ public class SessionManager
         string storePath,
         JsonSerializerOptions opts,
         string mode,
-        string defaultModel,
+        string defaultProfileKey,
         IEnumerable<ModelProfile>? knownModels = null)
     {
         _repo = repo;
@@ -38,11 +38,9 @@ public class SessionManager
         _storePath = storePath;
         _opts = opts;
         _mode = mode;
-        _defaultModel = defaultModel;
-        _models = (knownModels ?? Array.Empty<ModelProfile>())
-            .GroupBy(m => m.Model, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .ToDictionary(m => m.Model, m => m, StringComparer.OrdinalIgnoreCase);
+        _defaultProfileKey = defaultProfileKey;
+        _profilesByKey = (knownModels ?? Array.Empty<ModelProfile>())
+            .ToDictionary(profile => profile.Key, StringComparer.OrdinalIgnoreCase);
 
         _compactSend = Util.DetectEnv("COMPACT_SEND", "true").Equals("true", StringComparison.OrdinalIgnoreCase);
         _compactLastPairs = int.TryParse(Util.DetectEnv("COMPACT_LAST_PAIRS", "6"), out var lp) ? Math.Max(1, lp) : 6;
@@ -76,7 +74,7 @@ public class SessionManager
 
         var currentMeta = _repo.Meta.TryGetValue(sid, out var existingMeta)
             ? existingMeta
-            : CreateConfiguredMeta(sid, _defaultModel);
+            : CreateConfiguredMeta(sid, _defaultProfileKey);
         var updatedMeta = BuildConfiguredMeta(currentMeta with { Sid = sid });
         if (!EqualityComparer<SessionMeta>.Default.Equals(currentMeta, updatedMeta))
         {
@@ -119,17 +117,25 @@ public class SessionManager
             : null;
     }
 
-    public void SetModel(string sid, string model)
+    public void SetModelProfile(string sid, string profileKey)
     {
         Ensure(sid);
 
         var currentMeta = _repo.Meta[sid];
-        var updatedMeta = BuildConfiguredMeta(currentMeta with { Model = model });
+        var profile = ResolveConfiguredProfile(profileKey);
+        var updatedMeta = BuildConfiguredMeta(currentMeta with
+        {
+            ProfileKey = profile.Key,
+            Model = profile.Model
+        });
         if (EqualityComparer<SessionMeta>.Default.Equals(currentMeta, updatedMeta))
             return;
 
         _repo.Meta[sid] = updatedMeta;
-        _engine.Update(GetEngineSid(sid), model: updatedMeta.Model);
+        _engine.Update(
+            GetEngineSid(sid),
+            profileKey: updatedMeta.ProfileKey,
+            model: updatedMeta.Model);
         Persist();
     }
 
@@ -137,6 +143,12 @@ public class SessionManager
     {
         Ensure(sid);
         return _repo.Meta[sid].Model;
+    }
+
+    public string GetProfileKeyForSession(string sid)
+    {
+        Ensure(sid);
+        return _repo.Meta[sid].ProfileKey;
     }
 
     public void SetTemp(string sid, double temperature)
@@ -244,6 +256,7 @@ public class SessionManager
         var systemPrompt = _repo.Sessions[sid].FirstOrDefault(m => m.Role == "system")?.Content;
         _engine.CreateOrGet(
             GetEngineSid(sid),
+            meta.ProfileKey,
             meta.Model,
             systemPrompt,
             meta.Temperature,
@@ -316,11 +329,11 @@ public class SessionManager
             var knownConvId = GetConversationId(sid);
             LogContext(sid, pendingSession.Count, knownConvId);
 
-            var modelName = GetModelForSession(sid);
             var systemPrompt = session.FirstOrDefault(m => m.Role == "system")?.Content;
             _engine.CreateOrGet(
                 sessionId: engineSid,
-                model: modelName,
+                profileKey: meta.ProfileKey,
+                model: meta.Model,
                 systemPrompt: systemPrompt,
                 temperature: meta.Temperature,
                 topP: meta.TopP);
@@ -412,59 +425,78 @@ public class SessionManager
 
     private SessionMeta BuildConfiguredMeta(SessionMeta meta)
     {
-        var model = ResolveConfiguredModel(meta.Model);
-        var profile = ResolveConfiguredProfile(model);
+        var profile = ResolveConfiguredProfile(meta.ProfileKey, meta.Model);
 
         return meta with
         {
-            Model = model,
+            ProfileKey = profile.Key,
+            Model = profile.Model,
             Temperature = meta.TemperatureOverridden ? meta.Temperature : profile.Temperature,
             TopP = meta.TopPOverridden ? meta.TopP : profile.TopP
         };
     }
 
-    private SessionMeta CreateConfiguredMeta(string sid, string requestedModel)
+    private SessionMeta CreateConfiguredMeta(string sid, string requestedProfileKey)
     {
-        var profile = ResolveConfiguredProfile(requestedModel);
-        return new SessionMeta(sid, profile.Temperature, profile.TopP, profile.Model, false, false);
+        var profile = ResolveConfiguredProfile(requestedProfileKey);
+        return new SessionMeta(
+            sid,
+            profile.Temperature,
+            profile.TopP,
+            profile.Model,
+            false,
+            false,
+            profile.Key);
     }
 
-    private ModelProfile ResolveConfiguredProfile(string? requestedModel)
+    private ModelProfile ResolveConfiguredProfile(
+        string? requestedProfileKey,
+        string? legacyModel = null)
     {
-        var model = ResolveModel(requestedModel);
-        if (_models.TryGetValue(model, out var profile))
-            return profile;
-
-        if (_models.TryGetValue(_defaultModel, out var fallback))
-            return fallback;
-
-        throw new InvalidOperationException($"No configured model profile was found for '{model}', and no fallback profile exists.");
-    }
-
-    private string ResolveConfiguredModel(string? requested)
-    {
-        var model = ResolveModel(requested);
-
-        if (_models.Count > 0 && !_models.ContainsKey(model))
+        if (!string.IsNullOrWhiteSpace(requestedProfileKey)
+            && _profilesByKey.TryGetValue(requestedProfileKey.Trim(), out var profile))
         {
-            Console.WriteLine($"[warn] model '{model}' not found in configured list: {string.Join(", ", _models.Keys)}. Falling back to '{_defaultModel}'.");
-            return _defaultModel;
+            return profile;
         }
 
-        return model;
+        var model = string.IsNullOrWhiteSpace(legacyModel)
+            ? requestedProfileKey
+            : legacyModel;
+        if (!string.IsNullOrWhiteSpace(model))
+        {
+            var modelMatches = _profilesByKey.Values
+                .Where(candidate => string.Equals(
+                    candidate.Model,
+                    model.Trim(),
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (modelMatches.Count == 1)
+                return modelMatches[0];
+            if (modelMatches.Count > 1
+                && _profilesByKey.TryGetValue(_defaultProfileKey, out var defaultMatch)
+                && modelMatches.Contains(defaultMatch))
+            {
+                return defaultMatch;
+            }
+        }
+
+        if (_profilesByKey.TryGetValue(_defaultProfileKey, out var fallback))
+            return fallback;
+
+        throw new InvalidOperationException(
+            $"No configured model profile was found for key '{requestedProfileKey}', and no fallback profile exists.");
     }
 
     private void LogContext(string sid, int sessionCount, string? knownConvId)
     {
-        var model = GetModelForSession(sid);
-        var baseUrl = _models.TryGetValue(model, out var profile) ? profile.BaseUrl : Util.Env("LLM_BASE_URL");
+        var meta = _repo.Meta[sid];
+        var baseUrl = _profilesByKey.TryGetValue(meta.ProfileKey, out var profile)
+            ? profile.BaseUrl
+            : Util.Env("LLM_BASE_URL");
         Console.Error.WriteLine(
-            $"[Context] mode={_mode}, sid={sid}, model={model}, baseUrl={baseUrl}, " +
+            $"[Context] mode={_mode}, sid={sid}, profile={meta.ProfileKey}, model={meta.Model}, baseUrl={baseUrl}, " +
             $"convId={(knownConvId ?? "<null>")}, sessionCount={sessionCount}, topP={(_repo.Meta.TryGetValue(sid, out var topPMeta) ? topPMeta.TopP : double.NaN)}, temp={(_repo.Meta.TryGetValue(sid, out var tempMeta) ? tempMeta.Temperature : double.NaN)}");
     }
-
-    private string ResolveModel(string? requested)
-        => string.IsNullOrWhiteSpace(requested) ? _defaultModel : requested.Trim();
 
     private static void AddIfNotDup(List<Message> destination, Message? message)
     {

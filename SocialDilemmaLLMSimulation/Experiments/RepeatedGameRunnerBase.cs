@@ -145,8 +145,8 @@ public abstract class RepeatedGameRunnerBase
         int rounds,
         bool resetPrompts,
         int runId,
-        string? selectedModelA = null,
-        string? selectedModelB = null,
+        string? selectedProfileKeyA = null,
+        string? selectedProfileKeyB = null,
         long? experimentRunId = null)
     {
         return PlayCoreAsync(
@@ -156,8 +156,8 @@ public abstract class RepeatedGameRunnerBase
             resetPrompts,
             agentPromptVersion,
             runId,
-            selectedModelA,
-            selectedModelB,
+            selectedProfileKeyA,
+            selectedProfileKeyB,
             experimentRunId);
     }
 
@@ -170,8 +170,8 @@ public abstract class RepeatedGameRunnerBase
         long? experimentRunId = null)
     {
         var results = new Dictionary<string, RepeatedGameResult>();
-        var (modelA, modelB) = _sessionCoordinator.ResolveRunModels();
-        var runModelLabel = BuildRunLabel(modelA, modelB);
+        var (profileA, profileB) = _sessionCoordinator.ResolveRunModels();
+        var runModelLabel = BuildRunLabel(profileA, profileB);
         var effectivePrefix = string.IsNullOrWhiteSpace(baseSessionPrefix)
             ? runModelLabel
             : $"{baseSessionPrefix}__{runModelLabel}";
@@ -205,8 +205,8 @@ public abstract class RepeatedGameRunnerBase
                     resetPrompts,
                     version,
                     runId,
-                    modelA,
-                    modelB,
+                    profileA.Key,
+                    profileB.Key,
                     experimentRunId);
 
                 results[version] = result;
@@ -231,6 +231,17 @@ public abstract class RepeatedGameRunnerBase
             : $"{modelA}_vs_{modelB}";
     }
 
+    public static string BuildRunLabel(ModelProfile profileA, ModelProfile profileB)
+    {
+        if (!string.Equals(profileA.Model, profileB.Model, StringComparison.OrdinalIgnoreCase))
+            return BuildRunLabel(profileA.Model, profileB.Model);
+
+        if (string.Equals(profileA.Key, profileB.Key, StringComparison.OrdinalIgnoreCase))
+            return profileA.Model;
+
+        return $"{profileA.Key}_{profileA.Model}_vs_{profileB.Key}_{profileB.Model}";
+    }
+
     internal static string CreateExecutionSessionTag()
         => Guid.NewGuid().ToString("N")[..12];
 
@@ -241,8 +252,8 @@ public abstract class RepeatedGameRunnerBase
         bool resetPrompts,
         string agentPromptVersion,
         int runId,
-        string? selectedModelA = null,
-        string? selectedModelB = null,
+        string? selectedProfileKeyA = null,
+        string? selectedProfileKeyB = null,
         long? experimentRunId = null)
     {
         var log = new List<RepeatedGameRoundRow>(rounds);
@@ -251,8 +262,10 @@ public abstract class RepeatedGameRunnerBase
         var decisions = new List<ContextDecisionWrite>(rounds * 2);
         var explanations = new List<ContextExplanationWrite>((rounds / 10 + 1) * 2);
 
-        var (modelA, modelB) = _sessionCoordinator.ResolveRunModels(selectedModelA, selectedModelB);
-        var runModelLabel = BuildRunLabel(modelA, modelB);
+        var (profileA, profileB) = _sessionCoordinator.ResolveRunModels(
+            selectedProfileKeyA,
+            selectedProfileKeyB);
+        var runModelLabel = BuildRunLabel(profileA, profileB);
 
         string BuildFullPayoffTableFor(bool isA)
         {
@@ -282,12 +295,12 @@ public abstract class RepeatedGameRunnerBase
 
         _sessionCoordinator.PrepareExperimentSession(
             sessionA,
-            modelA,
+            profileA,
             GetAgentSystemPromptString("Player A", rounds, agentPromptVersion),
             resetPrompts);
         _sessionCoordinator.PrepareExperimentSession(
             sessionB,
-            modelB,
+            profileB,
             GetAgentSystemPromptString("Player B", rounds, agentPromptVersion),
             resetPrompts);
 
@@ -316,8 +329,10 @@ public abstract class RepeatedGameRunnerBase
             var rawA = await _sessionCoordinator.SendExperimentPromptAsync(sessionA, promptA, () => BuildFullPayoffTableFor(isA: true));
             var rawB = await _sessionCoordinator.SendExperimentPromptAsync(sessionB, promptB, () => BuildFullPayoffTableFor(isA: false));
 
-            var moveA = ParseMove(rawA.Reply) ?? throw new InvalidOperationException($"moveA cannot be null. Raw: {rawA.Reply}");
-            var moveB = ParseMove(rawB.Reply) ?? throw new InvalidOperationException($"moveB cannot be null. Raw: {rawB.Reply}");
+            var moveA = RepeatedGameResponseParser.ParseMove(rawA.Reply)
+                ?? throw new InvalidOperationException($"moveA cannot be null. Raw: {rawA.Reply}");
+            var moveB = RepeatedGameResponseParser.ParseMove(rawB.Reply)
+                ?? throw new InvalidOperationException($"moveB cannot be null. Raw: {rawB.Reply}");
 
             var (payoffA, payoffB) = Definition.GetPayoff(moveA, moveB);
             var (choiceA, choiceB) = Choice(moveA, moveB);
@@ -337,7 +352,7 @@ public abstract class RepeatedGameRunnerBase
                 rawB.Reply.Trim()));
 
             decisions.Add(new ContextDecisionWrite(
-                modelA,
+                profileA.Model,
                 Definition.DecisionCode,
                 title,
                 round,
@@ -348,9 +363,10 @@ public abstract class RepeatedGameRunnerBase
                 runId,
                 uniqueName,
                 "A",
-                uniqueName));
+                uniqueName,
+                profileA.Key));
             decisions.Add(new ContextDecisionWrite(
-                modelB,
+                profileB.Model,
                 Definition.DecisionCode,
                 title,
                 round,
@@ -361,7 +377,8 @@ public abstract class RepeatedGameRunnerBase
                 runId,
                 uniqueName,
                 "B",
-                uniqueName));
+                uniqueName,
+                profileB.Key));
 
             if (round % 10 == 0)
             {
@@ -626,12 +643,4 @@ Respond in natural language; do not answer with just 'c' or 'd'.
         };
     }
 
-    private static string? ParseMove(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-
-        var value = raw.Trim();
-        return value is "c" or "d" ? value : null;
-    }
 }

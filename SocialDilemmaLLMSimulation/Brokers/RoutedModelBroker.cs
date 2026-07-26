@@ -17,9 +17,10 @@ public sealed class RoutedModelBrokerOptions
     public int DefaultMaxTokens { get; set; } = 1024;
     public Dictionary<string, ModelRoute> Routes { get; set; } = new();
 }
-
 public sealed class ModelRoute
 {
+    public required string Model { get; set; }
+
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ProviderKind Provider { get; set; }
 
@@ -54,19 +55,19 @@ public sealed class RoutedModelBroker : IModelBroker
     }
 
     public async Task<(string text, (int PromptTokens, int CompletionTokens) usage, string? kvHandle)>
-        CompleteAsync(string model, string? system, IReadOnlyList<ChatMessage> messages,
+        CompleteAsync(string profileKey, string? system, IReadOnlyList<ChatMessage> messages,
                       double temperature, double topP, string? kvHandle, CancellationToken ct = default)
     {
-        if (!_opt.Routes.TryGetValue(model, out var route))
-            throw new InvalidOperationException($"No route configured for model '{model}'.");
+        if (!_opt.Routes.TryGetValue(profileKey, out var route))
+            throw new InvalidOperationException($"No route configured for model profile '{profileKey}'.");
 
         return route.Provider switch
         {
-            ProviderKind.OpenAI => await CallOpenAIAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
-            ProviderKind.OpenRouter => await CallOpenRouterAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
-            ProviderKind.OpenAICompat => await CallOpenAICompatAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
-            ProviderKind.LlamaCpp => await CallLlamaCppAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
-            ProviderKind.Ollama => await CallOllamaAsync(route, model, system, messages, temperature, topP, kvHandle, ct),
+            ProviderKind.OpenAI => await CallOpenAIAsync(route, route.Model, system, messages, temperature, topP, kvHandle, ct),
+            ProviderKind.OpenRouter => await CallOpenRouterAsync(route, route.Model, system, messages, temperature, topP, kvHandle, ct),
+            ProviderKind.OpenAICompat => await CallOpenAICompatAsync(route, route.Model, system, messages, temperature, topP, kvHandle, ct),
+            ProviderKind.LlamaCpp => await CallLlamaCppAsync(route, route.Model, system, messages, temperature, topP, kvHandle, ct),
+            ProviderKind.Ollama => await CallOllamaAsync(route, route.Model, system, messages, temperature, topP, kvHandle, ct),
             _ => throw new NotSupportedException($"Provider {route.Provider} not supported.")
         };
     }
@@ -232,6 +233,7 @@ public sealed class RoutedModelBroker : IModelBroker
         var kvParam = string.IsNullOrWhiteSpace(route.KvParamName) ? "slot_id" : route.KvParamName!;
         var effectiveRoute = new ModelRoute
         {
+            Model = route.Model,
             Provider = route.Provider,
             BaseUrl = route.BaseUrl,
             ApiKey = route.ApiKey,
@@ -313,5 +315,3 @@ public sealed class RoutedModelBroker : IModelBroker
         return p.ValueKind == JsonValueKind.Number ? p.GetInt32() : 0;
     }
 }
-
-
